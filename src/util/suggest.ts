@@ -14,6 +14,73 @@ import { DAWG } from './dawg';
 import { normalize, denormalize, detectCasing } from './index';
 import { form } from './form';
 
+/**
+ * Get equivalent characters from dictionary MAP groups
+ * Returns other characters in the same equivalence group
+ */
+function getMapEquivalents(char: string, mapGroups: string[]): string[] {
+  const lower = char.toLowerCase();
+  const equivalents: string[] = [];
+
+  for (const group of mapGroups) {
+    const lowerGroup = group.toLowerCase();
+    if (lowerGroup.includes(lower)) {
+      // Add all other characters in this group
+      for (const c of group) {
+        if (c.toLowerCase() !== lower) {
+          equivalents.push(c.toLowerCase());
+        }
+      }
+    }
+  }
+
+  return equivalents;
+}
+
+/**
+ * Generate n-grams (character sequences) from a word
+ */
+function generateNgrams(word: string, n: number = 2): Set<string> {
+  const ngrams = new Set<string>();
+  const lower = word.toLowerCase();
+  for (let i = 0; i <= lower.length - n; i++) {
+    ngrams.add(lower.slice(i, i + n));
+  }
+  return ngrams;
+}
+
+/**
+ * Calculate n-gram similarity score between two words
+ * Returns a score from 0 to 1
+ */
+function ngramSimilarity(word1: string, word2: string, n: number = 2): number {
+  const ngrams1 = generateNgrams(word1, n);
+  const ngrams2 = generateNgrams(word2, n);
+
+  if (ngrams1.size === 0 || ngrams2.size === 0) return 0;
+
+  let intersection = 0;
+  for (const ng of ngrams1) {
+    if (ngrams2.has(ng)) intersection++;
+  }
+
+  // Dice coefficient
+  return (2 * intersection) / (ngrams1.size + ngrams2.size);
+}
+
+/**
+ * Calculate common prefix length between two words
+ */
+function commonPrefixLength(a: string, b: string): number {
+  const lower1 = a.toLowerCase();
+  const lower2 = b.toLowerCase();
+  let i = 0;
+  while (i < lower1.length && i < lower2.length && lower1[i] === lower2[i]) {
+    i++;
+  }
+  return i;
+}
+
 interface SuggestMemory {
   state: Map<string, boolean>;
   weighted: Map<string, number>;
@@ -83,6 +150,24 @@ export function suggest(
     }
   }
 
+  // 2.5. Generate edits based on dictionary MAP (character equivalences)
+  if (affixData.flags.MAP.length > 0) {
+    for (let i = 0; i < normalized.length; i++) {
+      const character = normalized.charAt(i);
+      const before = normalized.slice(0, i);
+      const after = normalized.slice(i + 1);
+      const lower = character.toLowerCase();
+      const upper = lower !== character;
+
+      // Get equivalent characters from MAP
+      const variants = getMapEquivalents(character, affixData.flags.MAP);
+      for (const variant of variants) {
+        const replacementChar = upper ? variant.toUpperCase() : variant;
+        edits.push(before + replacementChar + after);
+      }
+    }
+  }
+
   // 3. Double/missing character detection (up to 3 distances)
   let nextCharacter = normalized.charAt(0);
   let values: string[] = [''];
@@ -146,12 +231,27 @@ export function suggest(
     previous = next;
   }
 
-  // 7. Sort suggestions by weight
+  // 7. Sort suggestions by weight and similarity
   suggestions.sort((a, b) => {
-    // Weight
+    // Base weight from edit generation
     const weightA = weighted.get(a) || 0;
     const weightB = weighted.get(b) || 0;
     if (weightA !== weightB) return weightB - weightA;
+
+    // N-gram similarity score (higher is better)
+    const ngramA = ngramSimilarity(normalized, a);
+    const ngramB = ngramSimilarity(normalized, b);
+    if (Math.abs(ngramA - ngramB) > 0.1) return ngramB - ngramA;
+
+    // Common prefix length (higher is better)
+    const prefixA = commonPrefixLength(normalized, a);
+    const prefixB = commonPrefixLength(normalized, b);
+    if (prefixA !== prefixB) return prefixB - prefixA;
+
+    // Length similarity (prefer same length)
+    const lenDiffA = Math.abs(a.length - normalized.length);
+    const lenDiffB = Math.abs(b.length - normalized.length);
+    if (lenDiffA !== lenDiffB) return lenDiffA - lenDiffB;
 
     // Casing match
     const casingA = detectCasing(a);

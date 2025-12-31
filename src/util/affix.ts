@@ -53,6 +53,7 @@ export function parseAffix(content: string): AffixData {
   const flags: AffixFlags = {
     KEY: [],
     TRY: [],
+    MAP: [],
     COMPOUNDMIN: 3,
   };
 
@@ -211,6 +212,17 @@ export function parseAffix(content: string): AffixData {
         // Keyboard layout
         const keyGroups = parts[1] ? parts[1].split('|') : [];
         flags.KEY.push(...keyGroups);
+        break;
+      }
+
+      case 'MAP': {
+        // Character equivalence groups (e.g., MAP aáàãâ means these chars are equivalent)
+        // First MAP line is the count, subsequent lines are the groups
+        const countOrGroup = parts[1];
+        if (countOrGroup && isNaN(parseInt(countOrGroup, 10))) {
+          // This is a group definition directly (single-line format)
+          flags.MAP.push(countOrGroup);
+        }
         break;
       }
 

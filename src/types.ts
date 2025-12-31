@@ -88,6 +88,8 @@ export interface AffixFlags {
   KEY: string[];
   /** Characters to try for suggestions */
   TRY: string[];
+  /** Character equivalence groups for suggestions (MAP) */
+  MAP: string[];
   /** Flag for words to exclude from suggestions */
   NOSUGGEST?: string;
   /** Flag for warning words */
