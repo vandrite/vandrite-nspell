@@ -127,25 +127,36 @@ export class NSpell {
    * Load a dictionary file into the DAWG
    */
   private loadDictionary(content: string): void {
-    const lines = splitLines(content);
+    const len = content.length;
+    let start = 0;
+    let lineCount = 0;
     const flagFormat = this.affixData.flags.FLAG;
-    const items = lines.length;
 
-    for (let i = 0; i < items; i++) {
-      const line = lines[i];
-      const trimmed = line.trim();
+    while (start < len) {
+      let end = content.indexOf('\n', start);
+      if (end === -1) end = len;
 
-      // Skip empty lines
-      if (!trimmed) continue;
+      // Handle CR for CRLF
+      let lineEnd = end;
+      if (lineEnd > start && content[lineEnd - 1] === '\r') {
+        lineEnd--;
+      }
 
-      // Skip first line if it's just a count
-      if (i === 0 && /^\d+$/.test(trimmed)) continue;
+      // Skip first line if it's just a count (often is)
+      if (lineCount === 0) {
+        const line = content.slice(start, lineEnd);
+        if (/^\d+$/.test(line)) {
+          start = end + 1;
+          lineCount++;
+          continue;
+        }
+      }
 
-      // Inline parse for speed - find first unescaped slash
+      // Find split point for word/flags
       let slashIndex = -1;
-      const len = trimmed.length;
-      for (let j = 0; j < len; j++) {
-        if (trimmed[j] === '/' && (j === 0 || trimmed[j - 1] !== '\\')) {
+      // Reverse search for slash is safer if word contains escaped slashes (uncommon but possible)
+      for (let j = start; j < lineEnd; j++) {
+        if (content[j] === '/' && (j === start || content[j - 1] !== '\\')) {
           slashIndex = j;
           break;
         }
@@ -155,18 +166,20 @@ export class NSpell {
       let parsedFlags: string[];
 
       if (slashIndex === -1) {
-        word = trimmed;
+        word = content.slice(start, lineEnd);
         parsedFlags = [];
       } else {
-        word = trimmed.slice(0, slashIndex);
-        const flagStr = trimmed.slice(slashIndex + 1);
+        word = content.slice(start, slashIndex);
+        const flagStr = content.slice(slashIndex + 1, lineEnd);
         parsedFlags = parseFlags(flagStr, flagFormat);
       }
 
-      if (!word) continue;
+      if (word) {
+        this.addWord(word, parsedFlags);
+      }
 
-      // Add to DAWG and generate forms
-      this.addWord(word, parsedFlags);
+      start = end + 1;
+      lineCount++;
     }
   }
 
