@@ -47,8 +47,9 @@ export class DAWG {
     if (!word) return;
 
     let node = this.root;
+    const len = word.length;
 
-    for (let i = 0; i < word.length; i++) {
+    for (let i = 0; i < len; i++) {
       const char = word[i];
       let child = node.children.get(char);
       if (!child) {
@@ -114,8 +115,9 @@ export class DAWG {
    */
   private findNode(word: string): DAWGNode | null {
     let node = this.root;
+    const len = word.length;
 
-    for (let i = 0; i < word.length; i++) {
+    for (let i = 0; i < len; i++) {
       const child = node.children.get(word[i]);
       if (!child) return null;
       node = child;

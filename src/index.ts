@@ -19,14 +19,13 @@ const NO_RULES: string[] = [];
  * NSpell - Hunspell-compatible spell checker
  */
 export class NSpell {
-  /** DAWG-based word storage */
   private dawg: DAWG;
-
-  /** Affix data */
   private affixData: AffixData;
-
-  /** Compiled compound rules as RegExp */
   private compiledCompoundRules: RegExp[];
+
+  // LRU cache for correct() results
+  private correctCache = new Map<string, boolean>();
+  private readonly CACHE_SIZE = 5000;
 
   constructor(aff: NSpellInput, dic?: string | Uint8Array | ArrayBuffer) {
     this.dawg = new DAWG();
@@ -131,6 +130,9 @@ export class NSpell {
     let start = 0;
     let lineCount = 0;
     const flagFormat = this.affixData.flags.FLAG;
+    const rules = this.affixData.rules;
+    const needAffixFlag = this.affixData.flags.NEEDAFFIX;
+    const compoundRuleCodes = this.affixData.compoundRuleCodes;
 
     while (start < len) {
       let end = content.indexOf('\n', start);
@@ -138,27 +140,35 @@ export class NSpell {
 
       // Handle CR for CRLF
       let lineEnd = end;
-      if (lineEnd > start && content[lineEnd - 1] === '\r') {
+      if (lineEnd > start && content.charCodeAt(lineEnd - 1) === 13) {
+        // \r
         lineEnd--;
       }
 
-      // Skip first line if it's just a count (often is)
+      // Skip first line if it's just a count (all digits)
       if (lineCount === 0) {
-        const line = content.slice(start, lineEnd);
-        if (/^\d+$/.test(line)) {
+        let isDigitOnly = true;
+        for (let j = start; j < lineEnd && isDigitOnly; j++) {
+          const c = content.charCodeAt(j);
+          if (c < 48 || c > 57) isDigitOnly = false; // 0-9
+        }
+        if (isDigitOnly && lineEnd > start) {
           start = end + 1;
           lineCount++;
           continue;
         }
       }
 
-      // Find split point for word/flags
+      // Find split point for word/flags (first unescaped slash)
       let slashIndex = -1;
-      // Reverse search for slash is safer if word contains escaped slashes (uncommon but possible)
       for (let j = start; j < lineEnd; j++) {
-        if (content[j] === '/' && (j === start || content[j - 1] !== '\\')) {
-          slashIndex = j;
-          break;
+        if (content.charCodeAt(j) === 47) {
+          // /
+          if (j === start || content.charCodeAt(j - 1) !== 92) {
+            // not escaped (\)
+            slashIndex = j;
+            break;
+          }
         }
       }
 
@@ -175,7 +185,7 @@ export class NSpell {
       }
 
       if (word) {
-        this.addWord(word, parsedFlags);
+        this.addWord(word, parsedFlags, rules, needAffixFlag, compoundRuleCodes);
       }
 
       start = end + 1;
@@ -184,47 +194,46 @@ export class NSpell {
   }
 
   /**
-   * Add a word with its flags to the dictionary, generating all forms
+   * Add a word with its flags to the dictionary
    */
-  private addWord(word: string, codes: string[]): void {
-    const needAffixFlag = this.affixData.flags.NEEDAFFIX;
-
-    // Don't add word directly if it has NEEDAFFIX flag
+  private addWord(
+    word: string,
+    codes: string[],
+    rules: Map<string, import('./types').AffixRule>,
+    needAffixFlag: string | undefined,
+    compoundRuleCodes: Map<string, string[]>,
+  ): void {
     if (!needAffixFlag || !codes.includes(needAffixFlag)) {
       this.dawg.add(word, codes.length > 0 ? codes : undefined);
     }
 
-    // Process each flag
     const len = codes.length;
+    if (len === 0) return;
+
     for (let i = 0; i < len; i++) {
       const code = codes[i];
 
-      // Track for compound rules
-      const compoundWords = this.affixData.compoundRuleCodes.get(code);
+      const compoundWords = compoundRuleCodes.get(code);
       if (compoundWords) {
         compoundWords.push(word);
       }
 
-      // Apply affix rules
-      const rule = this.affixData.rules.get(code);
+      const rule = rules.get(code);
       if (rule) {
-        const newWords = apply(word, rule, this.affixData.rules, []);
+        const newWords = apply(word, rule, rules, []);
         const newWordsLen = newWords.length;
 
         for (let j = 0; j < newWordsLen; j++) {
           const newWord = newWords[j];
-          // Just add - DAWG.add() handles duplicates efficiently
           this.dawg.add(newWord, NO_RULES);
 
-          // Handle combineable rules (prefix + suffix)
           if (rule.combineable) {
             for (let k = 0; k < len; k++) {
               if (k === i) continue;
               const otherCode = codes[k];
-
-              const otherRule = this.affixData.rules.get(otherCode);
+              const otherRule = rules.get(otherCode);
               if (otherRule && otherRule.combineable && otherRule.type !== rule.type) {
-                const combined = apply(newWord, otherRule, this.affixData.rules, []);
+                const combined = apply(newWord, otherRule, rules, []);
                 const combinedLen = combined.length;
                 for (let l = 0; l < combinedLen; l++) {
                   this.dawg.add(combined[l], NO_RULES);
@@ -246,46 +255,44 @@ export class NSpell {
     const trimmed = word.trim();
     if (!trimmed) return false;
 
-    // Only normalize calling func if needed to avoid overhead
+    // Check cache first
+    const cacheKey = trimmed;
+    const cached = this.correctCache.get(cacheKey);
+    if (cached !== undefined) return cached;
+
     const conversions = this.affixData.conversion.in;
     const normalized = conversions.length > 0 ? normalize(trimmed, conversions) : trimmed;
+    const keepCase = this.affixData.flags.KEEPCASE;
 
-    // Fast path: direct lookup
-    let node = this.dawg.findNodePublic(normalized);
-    if (node?.isEnd) {
-      return this.isValidWord(node.flags);
-    }
-
-    // Try lowercase
+    // Try all case variations
     const lower = normalized.toLowerCase();
-    if (lower !== normalized) {
-      node = this.dawg.findNodePublic(lower);
-      if (node?.isEnd) {
-        if (this.isValidWord(node.flags)) {
-          const keepCase = this.affixData.flags.KEEPCASE;
-          if (!keepCase || !node.flags?.includes(keepCase)) {
-            return true;
-          }
-        }
-      }
-    }
-
-    // Try sentence case
+    const candidates = [normalized];
+    if (lower !== normalized) candidates.push(lower);
     if (normalized === normalized.toUpperCase() && normalized.length > 1) {
-      const sentenceCase = normalized.charAt(0) + normalized.slice(1).toLowerCase();
-      node = this.dawg.findNodePublic(sentenceCase);
-      if (node?.isEnd) {
-        if (this.isValidWord(node.flags)) {
-          const keepCase = this.affixData.flags.KEEPCASE;
-          if (!keepCase || !node.flags?.includes(keepCase)) {
-            return true;
-          }
+      candidates.push(normalized.charAt(0) + normalized.slice(1).toLowerCase());
+    }
+
+    for (let i = 0; i < candidates.length; i++) {
+      const node = this.dawg.findNodePublic(candidates[i]);
+      if (node?.isEnd && this.isValidWord(node.flags)) {
+        if (!keepCase || !node.flags?.includes(keepCase) || i === 0) {
+          this.setCacheResult(cacheKey, true);
+          return true;
         }
       }
     }
 
-    // Try compound words as last resort
-    return this.checkCompound(normalized);
+    const result = this.checkCompound(normalized);
+    this.setCacheResult(cacheKey, result);
+    return result;
+  }
+
+  private setCacheResult(key: string, value: boolean): void {
+    if (this.correctCache.size >= this.CACHE_SIZE) {
+      const firstKey = this.correctCache.keys().next().value;
+      if (firstKey) this.correctCache.delete(firstKey);
+    }
+    this.correctCache.set(key, value);
   }
 
   /**
@@ -366,18 +373,13 @@ export class NSpell {
     const minLen = this.affixData.flags.COMPOUNDMIN;
     if (word.length < minLen * 2) return false;
 
-    // Only check compounds if compound rules are defined
-    if (this.compiledCompoundRules.length === 0) {
-      return false;
-    }
+    const rules = this.compiledCompoundRules;
+    const rulesLen = rules.length;
+    if (rulesLen === 0) return false;
 
-    // Check against compiled compound rules only
-    for (const rule of this.compiledCompoundRules) {
-      if (rule.test(word)) {
-        return true;
-      }
+    for (let i = 0; i < rulesLen; i++) {
+      if (rules[i].test(word)) return true;
     }
-
     return false;
   }
 
@@ -401,7 +403,14 @@ export class NSpell {
       flags = this.dawg.getFlags(model) || [];
     }
 
-    this.addWord(word, flags);
+    this.addWord(
+      word,
+      flags,
+      this.affixData.rules,
+      this.affixData.flags.NEEDAFFIX,
+      this.affixData.compoundRuleCodes,
+    );
+    this.correctCache.clear();
     return this;
   }
 
@@ -410,6 +419,7 @@ export class NSpell {
    */
   remove(word: string): this {
     this.dawg.remove(word);
+    this.correctCache.clear();
     return this;
   }
 
@@ -418,6 +428,7 @@ export class NSpell {
    */
   dictionary(dic: string | Uint8Array | ArrayBuffer): this {
     this.loadDictionary(toString(dic));
+    this.correctCache.clear();
     return this;
   }
 

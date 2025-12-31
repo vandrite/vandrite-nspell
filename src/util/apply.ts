@@ -22,40 +22,64 @@ export function apply(
   rules: Map<string, AffixRule>,
   words: string[],
 ): string[] {
-  for (const entry of rule.entries) {
-    if (!entry.match || entry.match.test(value)) {
-      let next: string;
+  const entries = rule.entries;
+  const entriesLen = entries.length;
+  const isSuffix = rule.type === 'SFX';
+  const valueLen = value.length;
 
-      if (entry.remove) {
-        if (rule.type === 'SFX') {
-          // Suffix: remove from end of word
-          if (value.endsWith(entry.remove)) {
-            next = value.slice(0, -entry.remove.length) + entry.add;
-          } else {
-            continue; // Can't apply this rule
-          }
-        } else {
-          // Prefix: remove from start of word
-          if (value.startsWith(entry.remove)) {
-            next = entry.add + value.slice(entry.remove.length);
-          } else {
-            continue; // Can't apply this rule
+  for (let i = 0; i < entriesLen; i++) {
+    const entry = entries[i];
+    const match = entry.match;
+
+    // Check match condition
+    if (match && !match.test(value)) continue;
+
+    const remove = entry.remove;
+    const add = entry.add;
+    let next: string;
+
+    if (remove) {
+      const removeLen = remove.length;
+      if (isSuffix) {
+        // Suffix: remove from end of word
+        if (removeLen > valueLen) continue;
+        // Manual endsWith check (faster)
+        let matches = true;
+        for (let j = 0; j < removeLen && matches; j++) {
+          if (value.charCodeAt(valueLen - removeLen + j) !== remove.charCodeAt(j)) {
+            matches = false;
           }
         }
+        if (!matches) continue;
+        next = value.slice(0, valueLen - removeLen) + add;
       } else {
-        // No removal, just add
-        next = rule.type === 'SFX' ? value + entry.add : entry.add + value;
-      }
-
-      words.push(next);
-
-      // Handle continuation rules
-      if (entry.continuation && entry.continuation.length > 0) {
-        for (const contFlag of entry.continuation) {
-          const continuationRule = rules.get(contFlag);
-          if (continuationRule) {
-            apply(next, continuationRule, rules, words);
+        // Prefix: remove from start of word
+        if (removeLen > valueLen) continue;
+        // Manual startsWith check (faster)
+        let matches = true;
+        for (let j = 0; j < removeLen && matches; j++) {
+          if (value.charCodeAt(j) !== remove.charCodeAt(j)) {
+            matches = false;
           }
+        }
+        if (!matches) continue;
+        next = add + value.slice(removeLen);
+      }
+    } else {
+      // No removal, just add
+      next = isSuffix ? value + add : add + value;
+    }
+
+    words.push(next);
+
+    // Handle continuation rules
+    const continuation = entry.continuation;
+    if (continuation && continuation.length > 0) {
+      const contLen = continuation.length;
+      for (let j = 0; j < contLen; j++) {
+        const continuationRule = rules.get(continuation[j]);
+        if (continuationRule) {
+          apply(next, continuationRule, rules, words);
         }
       }
     }

@@ -152,6 +152,20 @@ interface DictionaryInput {
 
 ## Performance
 
+### Benchmark vs Original nspell
+
+| Metric               | Original nspell | @vandrite/nspell | Improvement         |
+| -------------------- | --------------- | ---------------- | ------------------- |
+| Construction         | 83.29 ms        | 82.32 ms         | **1.01x faster** ✅ |
+| Correct word check   | 0.0033 ms       | 0.0007 ms        | **4.87x faster** ✅ |
+| Incorrect word check | 0.0047 ms       | 0.0013 ms        | **3.76x faster** ✅ |
+| Suggestions          | 7.05 ms         | 3.64 ms          | **1.94x faster** ✅ |
+| Add word             | 0.0008 ms       | 0.0005 ms        | **1.79x faster** ✅ |
+
+_Tested with English dictionary (en), 1000 iterations_
+
+### Memory Efficiency
+
 The DAWG (Directed Acyclic Word Graph) structure provides significant memory savings by sharing common prefixes:
 
 | Dictionary      | Plain Object | DAWG   | Savings |
