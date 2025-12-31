@@ -1,6 +1,6 @@
 {
   "name": "@vandrite/nspell",
-  "version": "0.1.0",
+  "version": "0.1.1",
   "description": "Modern Hunspell-compatible spell checker with DAWG storage",
   "license": "MIT",
   "repository": {
