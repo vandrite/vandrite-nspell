@@ -38,7 +38,8 @@
     }
   },
   "files": [
-    "dist"
+    "dist",
+    "types"
   ],
   "scripts": {
     "build": "tsup",
@@ -48,6 +49,8 @@
     "test:coverage": "vitest run --coverage",
     "typecheck": "tsc --noEmit",
     "lint": "eslint src --ext .ts",
+    "format": "prettier --write .",
+    "benchmark": "npx tsx benchmark/benchmark.ts",
     "prepublishOnly": "npm run build"
   },
   "devDependencies": {
@@ -55,6 +58,8 @@
     "@vandrite/dictionaries": "^1.1.3",
     "@vitest/coverage-v8": "^4.0.16",
     "eslint": "^9.39.2",
+    "nspell": "^2.1.5",
+    "prettier": "^3.7.4",
     "tsup": "^8.5.1",
     "typescript": "^5.9.3",
     "vitest": "^4.0.16"
