@@ -9,10 +9,10 @@
  * - Weighted sorting
  */
 
-import type { AffixData, AffixFlags } from "../types";
-import { DAWG } from "./dawg";
-import { normalize, denormalize, detectCasing } from "./index";
-import { form } from "./form";
+import type { AffixData, AffixFlags } from '../types';
+import { DAWG } from './dawg';
+import { normalize, denormalize, detectCasing } from './index';
+import { form } from './form';
 
 interface SuggestMemory {
   state: Map<string, boolean>;
@@ -28,7 +28,7 @@ export function suggest(
   affixData: AffixData,
   compoundRules: RegExp[],
   value: string,
-  correctFn: (word: string) => boolean
+  correctFn: (word: string) => boolean,
 ): string[] {
   const suggestions: string[] = [];
   const weighted = new Map<string, number>();
@@ -47,11 +47,7 @@ export function suggest(
   for (const [from, to] of affixData.replacementTable) {
     let offset = normalized.indexOf(from);
     while (offset > -1) {
-      edits.push(
-        normalized.slice(0, offset) +
-          to +
-          normalized.slice(offset + from.length)
-      );
+      edits.push(normalized.slice(0, offset) + to + normalized.slice(offset + from.length));
       offset = normalized.indexOf(from, offset + 1);
     }
   }
@@ -89,7 +85,7 @@ export function suggest(
 
   // 3. Double/missing character detection (up to 3 distances)
   let nextCharacter = normalized.charAt(0);
-  let values: string[] = [""];
+  let values: string[] = [''];
   let max = 1;
   let distance = 0;
 
@@ -97,8 +93,7 @@ export function suggest(
     const character = nextCharacter;
     nextCharacter = normalized.charAt(i + 1);
 
-    const replacement =
-      character === nextCharacter ? "" : character + character;
+    const replacement = character === nextCharacter ? '' : character + character;
     const count = values.length;
 
     for (let j = 0; j < count; j++) {
@@ -135,34 +130,19 @@ export function suggest(
     suggestions,
   };
 
-  const firstLevel = generate(
-    dawg,
-    affixData,
-    compoundRules,
-    correctFn,
-    memory,
-    values,
-    edits
-  );
+  const firstLevel = generate(dawg, affixData, compoundRules, correctFn, memory, values, edits);
 
   // 6. If no suggestions, try edit distance 2 in batches
   let previous = 0;
   const maxIterations = Math.min(
     firstLevel.length,
-    Math.pow(Math.max(15 - normalized.length, 3), 3)
+    Math.pow(Math.max(15 - normalized.length, 3), 3),
   );
   const batchSize = Math.max(Math.pow(10 - normalized.length, 3), 1);
 
   while (!suggestions.length && previous < maxIterations) {
     const next = previous + batchSize;
-    generate(
-      dawg,
-      affixData,
-      compoundRules,
-      correctFn,
-      memory,
-      firstLevel.slice(previous, next)
-    );
+    generate(dawg, affixData, compoundRules, correctFn, memory, firstLevel.slice(previous, next));
     previous = next;
   }
 
@@ -212,7 +192,7 @@ function generate(
   _correctFn: (word: string) => boolean,
   memory: SuggestMemory,
   words: string[],
-  edits?: string[]
+  edits?: string[],
 ): string[] {
   const characters = affixData.flags.TRY;
   const result: string[] = [];
@@ -226,8 +206,8 @@ function generate(
 
   // Iterate over each word
   for (const word of words) {
-    let before = "";
-    let character = "";
+    let before = '';
+    let character = '';
     let nextCharacter = word.charAt(0);
     let nextAfter = word;
     let nextNextAfter = word.slice(1);
@@ -251,12 +231,7 @@ function generate(
       // Case switching edits
       if (nextAfter && upper !== nextUpper) {
         check(before + switchCase(nextAfter));
-        check(
-          before +
-            switchCase(nextCharacter) +
-            switchCase(character) +
-            nextNextAfter
-        );
+        check(before + switchCase(nextCharacter) + switchCase(character) + nextNextAfter);
       }
 
       // Remove
@@ -272,7 +247,7 @@ function generate(
         const injectUpper = inject.toUpperCase();
 
         if (upper && inject !== injectUpper) {
-          if (currentCase !== "lower") {
+          if (currentCase !== 'lower') {
             check(before + inject + after);
             check(before + inject + nextAfter);
           }
@@ -300,16 +275,9 @@ function generate(
     result.push(value);
 
     // Find the corrected form
-    const corrected = form(
-      dawg,
-      affixData.flags,
-      affixData.conversion.in,
-      value,
-      false
-    );
+    const corrected = form(dawg, affixData.flags, affixData.conversion.in, value, false);
 
-    const isValid =
-      corrected !== null && !hasNoSuggestFlag(dawg, affixData.flags, corrected);
+    const isValid = corrected !== null && !hasNoSuggestFlag(dawg, affixData.flags, corrected);
 
     memory.state.set(value, isValid);
 
@@ -322,9 +290,8 @@ function generate(
   function switchCase(fragment: string): string {
     const first = fragment.charAt(0);
     return (
-      (first.toLowerCase() === first
-        ? first.toUpperCase()
-        : first.toLowerCase()) + fragment.slice(1)
+      (first.toLowerCase() === first ? first.toUpperCase() : first.toLowerCase()) +
+      fragment.slice(1)
     );
   }
 }
@@ -332,11 +299,7 @@ function generate(
 /**
  * Check if a word has the NOSUGGEST flag
  */
-function hasNoSuggestFlag(
-  dawg: DAWG,
-  flags: AffixFlags,
-  word: string
-): boolean {
+function hasNoSuggestFlag(dawg: DAWG, flags: AffixFlags, word: string): boolean {
   if (!flags.NOSUGGEST) return false;
   const wordFlags = dawg.getFlags(word);
   return wordFlags !== undefined && wordFlags.includes(flags.NOSUGGEST);

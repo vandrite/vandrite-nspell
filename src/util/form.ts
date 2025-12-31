@@ -4,9 +4,9 @@
  * Find known forms of words considering casing and normalization.
  */
 
-import type { AffixFlags } from "../types";
-import { DAWG } from "./dawg";
-import { normalize, hasFlag } from "./index";
+import type { AffixFlags } from '../types';
+import { DAWG } from './dawg';
+import { normalize, hasFlag } from './index';
 
 /**
  * Find a known form of a word in the dictionary
@@ -23,7 +23,7 @@ export function form(
   flags: AffixFlags,
   conversion: [RegExp, string][],
   value: string,
-  all: boolean = false
+  all: boolean = false,
 ): string | null {
   let normal = value.trim();
 
@@ -74,17 +74,9 @@ export function form(
 /**
  * Check if a word should be ignored in form finding
  */
-function shouldIgnore(
-  dawg: DAWG,
-  flags: AffixFlags,
-  word: string,
-  all: boolean
-): boolean {
+function shouldIgnore(dawg: DAWG, flags: AffixFlags, word: string, all: boolean): boolean {
   const wordFlags = dawg.getFlags(word);
-  return (
-    hasFlag(wordFlags, flags.KEEPCASE) ||
-    (!all && hasFlag(wordFlags, flags.FORBIDDENWORD))
-  );
+  return hasFlag(wordFlags, flags.KEEPCASE) || (!all && hasFlag(wordFlags, flags.FORBIDDENWORD));
 }
 
 /**
@@ -94,7 +86,7 @@ export function exact(
   dawg: DAWG,
   flags: AffixFlags,
   compoundRules: RegExp[],
-  value: string
+  value: string,
 ): boolean {
   if (dawg.has(value)) {
     const wordFlags = dawg.getFlags(value);

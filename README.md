@@ -36,42 +36,42 @@ npm install @vandrite/nspell
 ### Basic Usage
 
 ```typescript
-import NSpell from "@vandrite/nspell";
+import NSpell from '@vandrite/nspell';
 
 // Load dictionary (aff and dic content as strings or Uint8Array)
 const spell = new NSpell({ aff: affContent, dic: dicContent });
 
 // Check spelling
-spell.correct("color"); // true
-spell.correct("colour"); // depends on dictionary
+spell.correct('color'); // true
+spell.correct('colour'); // depends on dictionary
 
 // Get suggestions
-spell.suggest("speling"); // ['spelling', ...]
+spell.suggest('speling'); // ['spelling', ...]
 
 // Detailed spell check
-spell.spell("hello");
+spell.spell('hello');
 // { correct: true, forbidden: false, warn: false }
 ```
 
 ### With @vandrite/dictionaries
 
 ```typescript
-import NSpell from "@vandrite/nspell";
-import en from "@vandrite/dictionaries/en";
+import NSpell from '@vandrite/nspell';
+import en from '@vandrite/dictionaries/en';
 
 const spell = new NSpell({
   aff: en.aff,
   dic: en.dic,
 });
 
-spell.correct("hello"); // true
-spell.suggest("helo"); // ['hello', 'help', 'helot', ...]
+spell.correct('hello'); // true
+spell.suggest('helo'); // ['hello', 'help', 'helot', ...]
 ```
 
 ### Async Loading (Browser)
 
 ```typescript
-import { loadAsync, loadFromUrl } from "@vandrite/nspell/async";
+import { loadAsync, loadFromUrl } from '@vandrite/nspell/async';
 
 // Load with progress
 const spell = await loadAsync(
@@ -80,13 +80,13 @@ const spell = await loadAsync(
     onProgress: (loaded, total) => {
       console.log(`Loading: ${Math.round((loaded / total) * 100)}%`);
     },
-  }
+  },
 );
 
 // Or load from URLs
 const spell2 = await loadFromUrl(
-  "https://cdn.example.com/en.aff",
-  "https://cdn.example.com/en.dic"
+  'https://cdn.example.com/en.aff',
+  'https://cdn.example.com/en.dic',
 );
 ```
 
@@ -94,17 +94,17 @@ const spell2 = await loadFromUrl(
 
 ```typescript
 // Add custom words
-spell.add("npm");
-spell.add("TypeScript");
+spell.add('npm');
+spell.add('TypeScript');
 
 // Add word modeled after existing (inherits affixes)
-spell.add("api", "hello"); // 'apis' will also be valid
+spell.add('api', 'hello'); // 'apis' will also be valid
 
 // Remove words
-spell.remove("colour");
+spell.remove('colour');
 
 // Forbidden words (personal dictionary format)
-spell.personal("*badword");
+spell.personal('*badword');
 ```
 
 ## API

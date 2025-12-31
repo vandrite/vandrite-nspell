@@ -50,7 +50,7 @@ export interface AffixEntry {
  */
 export interface AffixRule {
   /** Rule type: prefix or suffix */
-  type: "PFX" | "SFX";
+  type: 'PFX' | 'SFX';
   /** Whether this rule can combine with others */
   combineable: boolean;
   /** List of transformation entries */
@@ -83,7 +83,7 @@ export interface AffixData {
  */
 export interface AffixFlags {
   /** Flag encoding type */
-  FLAG?: "short" | "long" | "num" | "UTF-8";
+  FLAG?: 'short' | 'long' | 'num' | 'UTF-8';
   /** Keyboard layout for suggestions */
   KEY: string[];
   /** Characters to try for suggestions */
@@ -151,12 +151,7 @@ export interface DictionaryInput {
 /**
  * Valid input types for NSpell constructor
  */
-export type NSpellInput =
-  | DictionaryInput
-  | DictionaryInput[]
-  | string
-  | Uint8Array
-  | ArrayBuffer;
+export type NSpellInput = DictionaryInput | DictionaryInput[] | string | Uint8Array | ArrayBuffer;
 
 // ============================================================================
 // Async Loading Types
@@ -187,4 +182,4 @@ export interface WordEntry {
 /**
  * Casing type for a word
  */
-export type CasingType = "lower" | "upper" | "capitalized" | "mixed" | null;
+export type CasingType = 'lower' | 'upper' | 'capitalized' | 'mixed' | null;

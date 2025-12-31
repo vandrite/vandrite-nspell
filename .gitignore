@@ -6,3 +6,4 @@ coverage/
 *.tgz
 .env
 .env.local
+benchmark/*.txt

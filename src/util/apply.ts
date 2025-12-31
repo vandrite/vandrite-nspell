@@ -5,7 +5,7 @@
  * to generate all valid forms of a word.
  */
 
-import type { AffixRule } from "../types";
+import type { AffixRule } from '../types';
 
 /**
  * Apply a single affix rule to a word, generating all possible forms
@@ -20,14 +20,14 @@ export function apply(
   value: string,
   rule: AffixRule,
   rules: Map<string, AffixRule>,
-  words: string[]
+  words: string[],
 ): string[] {
   for (const entry of rule.entries) {
     if (!entry.match || entry.match.test(value)) {
       let next: string;
 
       if (entry.remove) {
-        if (rule.type === "SFX") {
+        if (rule.type === 'SFX') {
           // Suffix: remove from end of word
           if (value.endsWith(entry.remove)) {
             next = value.slice(0, -entry.remove.length) + entry.add;
@@ -44,7 +44,7 @@ export function apply(
         }
       } else {
         // No removal, just add
-        next = rule.type === "SFX" ? value + entry.add : entry.add + value;
+        next = rule.type === 'SFX' ? value + entry.add : entry.add + value;
       }
 
       words.push(next);
@@ -75,7 +75,7 @@ export function apply(
 export function generateForms(
   word: string,
   flags: string[],
-  rules: Map<string, AffixRule>
+  rules: Map<string, AffixRule>,
 ): string[] {
   const forms: string[] = [word];
 
@@ -95,11 +95,7 @@ export function generateForms(
             if (otherFlag === flag) continue;
 
             const otherRule = rules.get(otherFlag);
-            if (
-              otherRule &&
-              otherRule.combineable &&
-              otherRule.type !== rule.type
-            ) {
+            if (otherRule && otherRule.combineable && otherRule.type !== rule.type) {
               const combinedForms = apply(form, otherRule, rules, []);
               for (const combined of combinedForms) {
                 if (!forms.includes(combined)) {

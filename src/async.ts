@@ -4,9 +4,9 @@
  * Provides non-blocking dictionary loading for browser environments.
  */
 
-import { NSpell } from "./index";
-import { toString, splitLines } from "./util";
-import type { DictionaryInput, LoadOptions } from "./types";
+import { NSpell } from './index';
+import { toString, splitLines } from './util';
+import type { DictionaryInput, LoadOptions } from './types';
 
 /**
  * Load a dictionary asynchronously with progress reporting
@@ -24,7 +24,7 @@ import type { DictionaryInput, LoadOptions } from "./types";
  */
 export async function loadAsync(
   input: DictionaryInput,
-  options: LoadOptions = {}
+  options: LoadOptions = {},
 ): Promise<NSpell> {
   const { onProgress, chunkSize = 10000 } = options;
 
@@ -43,9 +43,7 @@ export async function loadAsync(
 
   // Load dictionary in chunks
   for (let i = 0; i < lines.length; i += chunkSize) {
-    const chunk = lines
-      .slice(i, Math.min(i + chunkSize, lines.length))
-      .join("\n");
+    const chunk = lines.slice(i, Math.min(i + chunkSize, lines.length)).join('\n');
     spell.dictionary(chunk);
 
     const loaded = Math.min(i + chunkSize, total);
@@ -72,7 +70,7 @@ export async function loadAsync(
 export async function loadFromUrl(
   affUrl: string,
   dicUrl?: string,
-  options: LoadOptions = {}
+  options: LoadOptions = {},
 ): Promise<NSpell> {
   const [affResponse, dicResponse] = await Promise.all([
     fetch(affUrl),
@@ -102,10 +100,10 @@ export async function loadFromUrl(
  */
 export async function loadMultiple(
   inputs: DictionaryInput[],
-  options: LoadOptions = {}
+  options: LoadOptions = {},
 ): Promise<NSpell> {
   if (inputs.length === 0) {
-    throw new Error("At least one dictionary input is required");
+    throw new Error('At least one dictionary input is required');
   }
 
   const first = inputs[0];
@@ -127,7 +125,7 @@ export async function loadMultiple(
  */
 function yieldToEventLoop(): Promise<void> {
   return new Promise((resolve) => {
-    if (typeof setImmediate === "function") {
+    if (typeof setImmediate === 'function') {
       setImmediate(resolve);
     } else {
       setTimeout(resolve, 0);
@@ -136,4 +134,4 @@ function yieldToEventLoop(): Promise<void> {
 }
 
 // Re-export types
-export type { DictionaryInput, LoadOptions } from "./types";
+export type { DictionaryInput, LoadOptions } from './types';

@@ -4,25 +4,13 @@
  * A TypeScript spell checker with DAWG-based storage for memory efficiency.
  */
 
-import { DAWG } from "./util/dawg";
-import { parseAffix } from "./util/affix";
-import { suggest as suggestImpl } from "./util/suggest";
-import { form } from "./util/form";
-import { apply } from "./util/apply";
-import {
-  toString,
-  parseDicLine,
-  hasFlag,
-  splitLines,
-  parseFlags,
-  normalize,
-} from "./util";
-import type {
-  AffixData,
-  DictionaryInput,
-  NSpellInput,
-  SpellResult,
-} from "./types";
+import { DAWG } from './util/dawg';
+import { parseAffix } from './util/affix';
+import { suggest as suggestImpl } from './util/suggest';
+import { form } from './util/form';
+import { apply } from './util/apply';
+import { toString, hasFlag, splitLines, parseFlags, normalize } from './util';
+import type { AffixData, DictionaryInput, NSpellInput, SpellResult } from './types';
 
 /** Empty flags array constant */
 const NO_RULES: string[] = [];
@@ -48,28 +36,24 @@ export class NSpell {
     let dictionaries: DictionaryInput[] = [];
 
     // Parse input formats (matching original nspell exactly)
-    if (
-      typeof aff === "string" ||
-      aff instanceof Uint8Array ||
-      aff instanceof ArrayBuffer
-    ) {
+    if (typeof aff === 'string' || aff instanceof Uint8Array || aff instanceof ArrayBuffer) {
       affContent = toString(aff);
       if (dic !== undefined) {
         dictionaries = [{ aff: affContent, dic }];
       }
     } else if (Array.isArray(aff)) {
       if (aff.length === 0 || !aff[0]?.aff) {
-        throw new Error("Missing `aff` in dictionary");
+        throw new Error('Missing `aff` in dictionary');
       }
       affContent = toString(aff[0].aff);
       dictionaries = aff;
-    } else if (aff && typeof aff === "object" && "aff" in aff) {
+    } else if (aff && typeof aff === 'object' && 'aff' in aff) {
       affContent = toString(aff.aff);
       if (aff.dic) {
         dictionaries = [aff];
       }
     } else {
-      throw new Error("Missing `aff` in dictionary");
+      throw new Error('Missing `aff` in dictionary');
     }
 
     // Parse affix file
@@ -93,22 +77,22 @@ export class NSpell {
     for (const rule of this.affixData.compoundRules) {
       try {
         // Build pattern from rule chars (flags that can be combined)
-        let pattern = "";
+        let pattern = '';
         let i = 0;
         let valid = true;
 
         while (i < rule.length && valid) {
           const char = rule[i];
 
-          if (char === "*") {
-            pattern += "*";
-          } else if (char === "?") {
-            pattern += "?";
-          } else if (char === "(") {
+          if (char === '*') {
+            pattern += '*';
+          } else if (char === '?') {
+            pattern += '?';
+          } else if (char === '(') {
             // Optional group
-            let group = "";
+            let group = '';
             i++;
-            while (i < rule.length && rule[i] !== ")") {
+            while (i < rule.length && rule[i] !== ')') {
               group += rule[i];
               i++;
             }
@@ -117,7 +101,7 @@ export class NSpell {
             // Flag character - matches words with this flag
             const words = this.affixData.compoundRuleCodes.get(char);
             if (words && words.length > 0) {
-              pattern += `(${words.map(this.escapeRegex).join("|")})`;
+              pattern += `(${words.map(this.escapeRegex).join('|')})`;
             } else {
               // No words with this flag - skip this rule entirely
               valid = false;
@@ -136,7 +120,7 @@ export class NSpell {
   }
 
   private escapeRegex(str: string): string {
-    return str.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+    return str.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
   }
 
   /**
@@ -145,21 +129,41 @@ export class NSpell {
   private loadDictionary(content: string): void {
     const lines = splitLines(content);
     const flagFormat = this.affixData.flags.FLAG;
+    const items = lines.length;
 
-    for (let i = 0; i < lines.length; i++) {
+    for (let i = 0; i < items; i++) {
       const line = lines[i];
+      const trimmed = line.trim();
+
+      // Skip empty lines
+      if (!trimmed) continue;
 
       // Skip first line if it's just a count
-      if (i === 0 && /^\d+$/.test(line.trim())) {
-        continue;
+      if (i === 0 && /^\d+$/.test(trimmed)) continue;
+
+      // Inline parse for speed - find first unescaped slash
+      let slashIndex = -1;
+      const len = trimmed.length;
+      for (let j = 0; j < len; j++) {
+        if (trimmed[j] === '/' && (j === 0 || trimmed[j - 1] !== '\\')) {
+          slashIndex = j;
+          break;
+        }
       }
 
-      const { word, flags } = parseDicLine(line);
-      if (!word) continue;
+      let word: string;
+      let parsedFlags: string[];
 
-      // Re-parse flags with correct format
-      const parsedFlags =
-        flags.length > 0 ? parseFlags(flags.join(""), flagFormat) : [];
+      if (slashIndex === -1) {
+        word = trimmed;
+        parsedFlags = [];
+      } else {
+        word = trimmed.slice(0, slashIndex);
+        const flagStr = trimmed.slice(slashIndex + 1);
+        parsedFlags = parseFlags(flagStr, flagFormat);
+      }
+
+      if (!word) continue;
 
       // Add to DAWG and generate forms
       this.addWord(word, parsedFlags);
@@ -178,7 +182,10 @@ export class NSpell {
     }
 
     // Process each flag
-    for (const code of codes) {
+    const len = codes.length;
+    for (let i = 0; i < len; i++) {
+      const code = codes[i];
+
       // Track for compound rules
       const compoundWords = this.affixData.compoundRuleCodes.get(code);
       if (compoundWords) {
@@ -189,33 +196,25 @@ export class NSpell {
       const rule = this.affixData.rules.get(code);
       if (rule) {
         const newWords = apply(word, rule, this.affixData.rules, []);
+        const newWordsLen = newWords.length;
 
-        for (const newWord of newWords) {
-          if (!this.dawg.has(newWord)) {
-            this.dawg.add(newWord, NO_RULES);
-          }
+        for (let j = 0; j < newWordsLen; j++) {
+          const newWord = newWords[j];
+          // Just add - DAWG.add() handles duplicates efficiently
+          this.dawg.add(newWord, NO_RULES);
 
           // Handle combineable rules (prefix + suffix)
           if (rule.combineable) {
-            for (const otherCode of codes) {
-              if (otherCode === code) continue;
+            for (let k = 0; k < len; k++) {
+              if (k === i) continue;
+              const otherCode = codes[k];
 
               const otherRule = this.affixData.rules.get(otherCode);
-              if (
-                otherRule &&
-                otherRule.combineable &&
-                otherRule.type !== rule.type
-              ) {
-                const combined = apply(
-                  newWord,
-                  otherRule,
-                  this.affixData.rules,
-                  []
-                );
-                for (const combinedWord of combined) {
-                  if (!this.dawg.has(combinedWord)) {
-                    this.dawg.add(combinedWord, NO_RULES);
-                  }
+              if (otherRule && otherRule.combineable && otherRule.type !== rule.type) {
+                const combined = apply(newWord, otherRule, this.affixData.rules, []);
+                const combinedLen = combined.length;
+                for (let l = 0; l < combinedLen; l++) {
+                  this.dawg.add(combined[l], NO_RULES);
                 }
               }
             }
@@ -229,7 +228,69 @@ export class NSpell {
    * Check if a word is spelled correctly
    */
   correct(word: string): boolean {
-    return this.spell(word).correct;
+    if (!word) return false;
+
+    const trimmed = word.trim();
+    if (!trimmed) return false;
+
+    // Only normalize calling func if needed to avoid overhead
+    const conversions = this.affixData.conversion.in;
+    const normalized = conversions.length > 0 ? normalize(trimmed, conversions) : trimmed;
+
+    // Fast path: direct lookup
+    let node = this.dawg.findNodePublic(normalized);
+    if (node?.isEnd) {
+      return this.isValidWord(node.flags);
+    }
+
+    // Try lowercase
+    const lower = normalized.toLowerCase();
+    if (lower !== normalized) {
+      node = this.dawg.findNodePublic(lower);
+      if (node?.isEnd) {
+        if (this.isValidWord(node.flags)) {
+          const keepCase = this.affixData.flags.KEEPCASE;
+          if (!keepCase || !node.flags?.includes(keepCase)) {
+            return true;
+          }
+        }
+      }
+    }
+
+    // Try sentence case
+    if (normalized === normalized.toUpperCase() && normalized.length > 1) {
+      const sentenceCase = normalized.charAt(0) + normalized.slice(1).toLowerCase();
+      node = this.dawg.findNodePublic(sentenceCase);
+      if (node?.isEnd) {
+        if (this.isValidWord(node.flags)) {
+          const keepCase = this.affixData.flags.KEEPCASE;
+          if (!keepCase || !node.flags?.includes(keepCase)) {
+            return true;
+          }
+        }
+      }
+    }
+
+    // Try compound words as last resort
+    return this.checkCompound(normalized);
+  }
+
+  /**
+   * Check if a word with given flags is valid (not forbidden, not compound-only)
+   */
+  private isValidWord(flags: string[] | undefined): boolean {
+    if (!flags || flags.length === 0) return true;
+
+    // Check forbidden
+    const forbiddenFlag = this.affixData.flags.FORBIDDENWORD;
+    if (forbiddenFlag && flags.includes(forbiddenFlag)) return false;
+    if (flags.includes('__FORBIDDEN__')) return false;
+
+    // Check ONLYINCOMPOUND
+    const onlyInCompound = this.affixData.flags.ONLYINCOMPOUND;
+    if (onlyInCompound && flags.includes(onlyInCompound)) return false;
+
+    return true;
   }
 
   /**
@@ -254,7 +315,7 @@ export class NSpell {
       this.affixData.flags,
       this.affixData.conversion.in,
       normalized,
-      true // include forbidden for checking
+      true, // include forbidden for checking
     );
 
     if (foundForm !== null) {
@@ -263,7 +324,7 @@ export class NSpell {
 
       // Check for forbidden (both explicit flag and internal marker)
       const forbiddenFlag = this.affixData.flags.FORBIDDENWORD;
-      if (hasFlag(flags, forbiddenFlag) || hasFlag(flags, "__FORBIDDEN__")) {
+      if (hasFlag(flags, forbiddenFlag) || hasFlag(flags, '__FORBIDDEN__')) {
         result.correct = false;
         result.forbidden = true;
       }
@@ -311,12 +372,8 @@ export class NSpell {
    * Get spelling suggestions for a misspelled word
    */
   suggest(word: string): string[] {
-    return suggestImpl(
-      this.dawg,
-      this.affixData,
-      this.compiledCompoundRules,
-      word,
-      (w) => this.correct(w)
+    return suggestImpl(this.dawg, this.affixData, this.compiledCompoundRules, word, (w) =>
+      this.correct(w),
     );
   }
 
@@ -367,16 +424,15 @@ export class NSpell {
       const trimmed = line.trim();
       if (!trimmed) continue;
 
-      if (trimmed.startsWith("*")) {
+      if (trimmed.startsWith('*')) {
         // Forbidden word
         const word = trimmed.slice(1);
-        const forbiddenFlag =
-          this.affixData.flags.FORBIDDENWORD || "__FORBIDDEN__";
+        const forbiddenFlag = this.affixData.flags.FORBIDDENWORD || '__FORBIDDEN__';
         const existingFlags = this.dawg.getFlags(word) || [];
         this.dawg.add(word, [...existingFlags, forbiddenFlag]);
-      } else if (trimmed.includes("/")) {
+      } else if (trimmed.includes('/')) {
         // Word with model
-        const slashIdx = trimmed.indexOf("/");
+        const slashIdx = trimmed.indexOf('/');
         const word = trimmed.slice(0, slashIdx);
         const model = trimmed.slice(slashIdx + 1);
         this.add(word, model);
@@ -415,12 +471,7 @@ export class NSpell {
 export default NSpell;
 
 // Re-export types
-export type {
-  DictionaryInput,
-  NSpellInput,
-  SpellResult,
-  LoadOptions,
-} from "./types";
+export type { DictionaryInput, NSpellInput, SpellResult, LoadOptions } from './types';
 
 // Re-export DAWG for advanced usage
-export { DAWG } from "./util/dawg";
+export { DAWG } from './util/dawg';

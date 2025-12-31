@@ -7,7 +7,7 @@
  * - Efficient prefix search for suggestions
  */
 
-import type { DAWGNode, SerializedDAWGNode } from "../types";
+import type { DAWGNode, SerializedDAWGNode } from '../types';
 
 /**
  * DAWG - Directed Acyclic Word Graph
@@ -48,10 +48,11 @@ export class DAWG {
 
     let node = this.root;
 
-    for (const char of word) {
+    for (let i = 0; i < word.length; i++) {
+      const char = word[i];
       let child = node.children.get(char);
       if (!child) {
-        child = this.createNode();
+        child = { children: new Map(), isEnd: false };
         node.children.set(char, child);
       }
       node = child;
@@ -102,13 +103,20 @@ export class DAWG {
   }
 
   /**
+   * Find the node for a given word/prefix (public access)
+   */
+  findNodePublic(word: string): DAWGNode | null {
+    return this.findNode(word);
+  }
+
+  /**
    * Find the node for a given word/prefix
    */
   private findNode(word: string): DAWGNode | null {
     let node = this.root;
 
-    for (const char of word) {
-      const child = node.children.get(char);
+    for (let i = 0; i < word.length; i++) {
+      const child = node.children.get(word[i]);
       if (!child) return null;
       node = child;
     }
@@ -126,10 +134,7 @@ export class DAWG {
   /**
    * Get all words with a given prefix (limited for performance)
    */
-  *getWordsWithPrefix(
-    prefix: string,
-    maxResults: number = 100
-  ): Generator<string> {
+  *getWordsWithPrefix(prefix: string, maxResults: number = 100): Generator<string> {
     const node = this.findNode(prefix);
     if (!node) return;
 
@@ -158,7 +163,7 @@ export class DAWG {
    * Get all words in the DAWG (use with caution for large dictionaries)
    */
   *words(): Generator<string> {
-    yield* this.collectWords(this.root, "");
+    yield* this.collectWords(this.root, '');
   }
 
   /**

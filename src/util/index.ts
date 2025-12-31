@@ -2,13 +2,13 @@
  * Utility functions for text processing
  */
 
-import type { CasingType } from "../types";
+import type { CasingType } from '../types';
 
 /**
  * Convert buffer/Uint8Array to string
  */
 export function toString(value: string | Uint8Array | ArrayBuffer): string {
-  if (typeof value === "string") return value;
+  if (typeof value === 'string') return value;
   if (value instanceof ArrayBuffer) {
     return new TextDecoder().decode(value);
   }
@@ -25,19 +25,19 @@ export function detectCasing(word: string): CasingType {
   const upper = word.toUpperCase();
 
   if (word === lower) {
-    return "lower";
+    return 'lower';
   }
 
   if (word === upper) {
-    return "upper";
+    return 'upper';
   }
 
   // Check if only first letter is uppercase
   if (word[0] === word[0].toUpperCase() && word.slice(1) === lower.slice(1)) {
-    return "capitalized";
+    return 'capitalized';
   }
 
-  return "mixed";
+  return 'mixed';
 }
 
 /**
@@ -45,11 +45,11 @@ export function detectCasing(word: string): CasingType {
  */
 export function applyCasing(word: string, casing: CasingType): string {
   switch (casing) {
-    case "lower":
+    case 'lower':
       return word.toLowerCase();
-    case "upper":
+    case 'upper':
       return word.toUpperCase();
-    case "capitalized":
+    case 'capitalized':
       return word.charAt(0).toUpperCase() + word.slice(1).toLowerCase();
     default:
       return word;
@@ -59,10 +59,7 @@ export function applyCasing(word: string, casing: CasingType): string {
 /**
  * Normalize a word using input conversion rules
  */
-export function normalize(
-  word: string,
-  conversions: [RegExp, string][]
-): string {
+export function normalize(word: string, conversions: [RegExp, string][]): string {
   let result = word;
   for (const [pattern, replacement] of conversions) {
     result = result.replace(pattern, replacement);
@@ -73,10 +70,7 @@ export function normalize(
 /**
  * Apply output conversion rules to a word
  */
-export function denormalize(
-  word: string,
-  conversions: [RegExp, string][]
-): string {
+export function denormalize(word: string, conversions: [RegExp, string][]): string {
   let result = word;
   for (const [pattern, replacement] of conversions) {
     result = result.replace(pattern, replacement);
@@ -87,10 +81,7 @@ export function denormalize(
 /**
  * Check if a word has a specific flag
  */
-export function hasFlag(
-  flags: string[] | undefined,
-  flag: string | undefined
-): boolean {
+export function hasFlag(flags: string[] | undefined, flag: string | undefined): boolean {
   if (!flag || !flags) return false;
   return flags.includes(flag);
 }
@@ -102,7 +93,7 @@ export function hasFlag(
 export function parseDicLine(line: string): { word: string; flags: string[] } {
   const trimmed = line.trim();
   if (!trimmed) {
-    return { word: "", flags: [] };
+    return { word: '', flags: [] };
   }
 
   // Handle escaped slashes
@@ -116,7 +107,7 @@ export function parseDicLine(line: string): { word: string; flags: string[] } {
   const flagStr = trimmed.slice(slashIndex + 1);
 
   return {
-    word: word.replace(/\\\//g, "/"), // Unescape slashes in word
+    word: word.replace(/\\\//g, '/'), // Unescape slashes in word
     flags: parseFlags(flagStr),
   };
 }
@@ -126,7 +117,7 @@ export function parseDicLine(line: string): { word: string; flags: string[] } {
  */
 function findUnescapedSlash(str: string): number {
   for (let i = 0; i < str.length; i++) {
-    if (str[i] === "/" && (i === 0 || str[i - 1] !== "\\")) {
+    if (str[i] === '/' && (i === 0 || str[i - 1] !== '\\')) {
       return i;
     }
   }
@@ -138,12 +129,12 @@ function findUnescapedSlash(str: string): number {
  */
 export function parseFlags(
   flagStr: string,
-  format: "short" | "long" | "num" | "UTF-8" = "short"
+  format: 'short' | 'long' | 'num' | 'UTF-8' = 'short',
 ): string[] {
   if (!flagStr) return [];
 
   switch (format) {
-    case "long":
+    case 'long':
       // Two-character flags
       const longFlags: string[] = [];
       for (let i = 0; i < flagStr.length; i += 2) {
@@ -151,15 +142,15 @@ export function parseFlags(
       }
       return longFlags;
 
-    case "num":
+    case 'num':
       // Comma-separated numeric flags
       return flagStr
-        .split(",")
+        .split(',')
         .map((f) => f.trim())
         .filter(Boolean);
 
-    case "UTF-8":
-    case "short":
+    case 'UTF-8':
+    case 'short':
     default:
       // Single character flags (including UTF-8)
       return [...flagStr];
@@ -177,12 +168,12 @@ export function splitLines(text: string): string[] {
  * Create a regex that matches at the end of a string
  */
 export function endRegex(pattern: string): RegExp {
-  return new RegExp(pattern + "$");
+  return new RegExp(pattern + '$');
 }
 
 /**
  * Create a regex that matches at the start of a string
  */
 export function startRegex(pattern: string): RegExp {
-  return new RegExp("^" + pattern);
+  return new RegExp('^' + pattern);
 }
