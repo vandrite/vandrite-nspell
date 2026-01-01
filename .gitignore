@@ -7,3 +7,4 @@ coverage/
 .env
 .env.local
 benchmark/*.txt
+benchmark/versão 0.1.0

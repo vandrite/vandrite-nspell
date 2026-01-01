@@ -28,7 +28,7 @@ export class DAWG {
    */
   private createNode(): DAWGNode {
     return {
-      children: new Map(),
+      children: {},
       isEnd: false,
     };
   }
@@ -51,10 +51,10 @@ export class DAWG {
 
     for (let i = 0; i < len; i++) {
       const char = word[i];
-      let child = node.children.get(char);
+      let child = node.children[char];
       if (!child) {
-        child = { children: new Map(), isEnd: false };
-        node.children.set(char, child);
+        child = { children: {}, isEnd: false };
+        node.children[char] = child;
       }
       node = child;
     }
@@ -118,7 +118,7 @@ export class DAWG {
     const len = word.length;
 
     for (let i = 0; i < len; i++) {
-      const child = node.children.get(word[i]);
+      const child = node.children[word[i]];
       if (!child) return null;
       node = child;
     }
@@ -156,8 +156,8 @@ export class DAWG {
       yield prefix;
     }
 
-    for (const [char, child] of node.children) {
-      yield* this.collectWords(child, prefix + char);
+    for (const char in node.children) {
+      yield* this.collectWords(node.children[char], prefix + char);
     }
   }
 
@@ -186,10 +186,11 @@ export class DAWG {
   private serializeNode(node: DAWGNode): SerializedDAWGNode {
     const result: SerializedDAWGNode = {};
 
-    if (node.children.size > 0) {
+    const childKeys = Object.keys(node.children);
+    if (childKeys.length > 0) {
       result.c = {};
-      for (const [char, child] of node.children) {
-        result.c[char] = this.serializeNode(child);
+      for (const char of childKeys) {
+        result.c[char] = this.serializeNode(node.children[char]);
       }
     }
 
@@ -218,8 +219,8 @@ export class DAWG {
     const node = this.createNode();
 
     if (data.c) {
-      for (const [char, childData] of Object.entries(data.c)) {
-        node.children.set(char, this.deserializeNode(childData));
+      for (const char in data.c) {
+        node.children[char] = this.deserializeNode(data.c[char]);
       }
     }
 
@@ -236,8 +237,8 @@ export class DAWG {
 
   private countWords(node: DAWGNode): number {
     let count = node.isEnd ? 1 : 0;
-    for (const child of node.children.values()) {
-      count += this.countWords(child);
+    for (const char in node.children) {
+      count += this.countWords(node.children[char]);
     }
     return count;
   }
@@ -254,8 +255,8 @@ export class DAWG {
       if (node.isEnd) {
         totalDepth += depth;
       }
-      for (const child of node.children.values()) {
-        countNodes(child, depth + 1);
+      for (const char in node.children) {
+        countNodes(node.children[char], depth + 1);
       }
     };
 

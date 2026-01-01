@@ -8,10 +8,11 @@
 
 /**
  * DAWG node structure for efficient word storage
+ * Using Record instead of Map for faster object creation during construction
  */
 export interface DAWGNode {
   /** Child nodes indexed by character */
-  children: Map<string, DAWGNode>;
+  children: Record<string, DAWGNode>;
   /** Whether this node marks the end of a word */
   isEnd: boolean;
   /** Flags associated with this word (only if isEnd is true) */
