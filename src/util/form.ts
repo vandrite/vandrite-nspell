@@ -1,23 +1,12 @@
 /**
  * Form finding utilities
- *
- * Find known forms of words considering casing and normalization.
  */
 
 import type { AffixFlags } from '../types';
 import { DAWG } from './dawg';
 import { normalize, hasFlag } from './index';
 
-/**
- * Find a known form of a word in the dictionary
- *
- * @param dawg - The DAWG containing words
- * @param flags - Affix flags configuration
- * @param conversion - Input conversion rules
- * @param value - The word to find
- * @param all - If true, include forbidden words
- * @returns The normalized form if found, null otherwise
- */
+/** Find a known form of a word in the dictionary */
 export function form(
   dawg: DAWG,
   flags: AffixFlags,
@@ -71,17 +60,13 @@ export function form(
   return null;
 }
 
-/**
- * Check if a word should be ignored in form finding
- */
+/** Check if a word should be ignored in form finding */
 function shouldIgnore(dawg: DAWG, flags: AffixFlags, word: string, all: boolean): boolean {
   const wordFlags = dawg.getFlags(word);
   return hasFlag(wordFlags, flags.KEEPCASE) || (!all && hasFlag(wordFlags, flags.FORBIDDENWORD));
 }
 
-/**
- * Check if a word exists exactly in the dictionary (for compound checking)
- */
+/** Check if a word exists exactly in the dictionary (for compound checking) */
 export function exact(
   dawg: DAWG,
   flags: AffixFlags,

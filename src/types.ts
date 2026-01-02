@@ -2,10 +2,6 @@
  * Type definitions for @vandrite/nspell
  */
 
-// ============================================================================
-// DAWG Types
-// ============================================================================
-
 /**
  * DAWG node structure for efficient word storage
  * Using Record instead of Map for faster object creation during construction
@@ -27,10 +23,6 @@ export interface SerializedDAWGNode {
   e?: 1; // isEnd (only present if true)
   f?: string[]; // flags
 }
-
-// ============================================================================
-// Affix Types
-// ============================================================================
 
 /**
  * Affix rule entry - defines a single transformation
@@ -121,10 +113,6 @@ export interface AffixFlags {
   [key: string]: unknown;
 }
 
-// ============================================================================
-// Spell Result Types
-// ============================================================================
-
 /**
  * Detailed spell check result
  */
@@ -136,10 +124,6 @@ export interface SpellResult {
   /** Whether the word triggers a warning */
   warn: boolean;
 }
-
-// ============================================================================
-// Input Types
-// ============================================================================
 
 /**
  * Dictionary input object with aff and optional dic
@@ -156,10 +140,6 @@ export interface DictionaryInput {
  */
 export type NSpellInput = DictionaryInput | DictionaryInput[] | string | Uint8Array | ArrayBuffer;
 
-// ============================================================================
-// Async Loading Types
-// ============================================================================
-
 /**
  * Options for async dictionary loading
  */
@@ -169,10 +149,6 @@ export interface LoadOptions {
   /** Number of lines to process per chunk */
   chunkSize?: number;
 }
-
-// ============================================================================
-// Internal Types
-// ============================================================================
 
 /**
  * Word with its associated flags

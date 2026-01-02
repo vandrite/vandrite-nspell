@@ -10,6 +10,7 @@ import { suggest as suggestImpl } from './util/suggest';
 import { form } from './util/form';
 import { apply } from './util/apply';
 import { toString, hasFlag, splitLines, parseFlags, normalize } from './util';
+import { LRUCache } from './util/lru-cache';
 import type { AffixData, DictionaryInput, NSpellInput, SpellResult } from './types';
 
 /** Empty flags array constant */
@@ -26,6 +27,9 @@ export class NSpell {
   // LRU cache for correct() results
   private correctCache = new Map<string, boolean>();
   private readonly CACHE_SIZE = 5000;
+
+  // LRU cache for suggest() results
+  private suggestCache = new LRUCache<string, string[]>(1000);
 
   constructor(aff: NSpellInput, dic?: string | Uint8Array | ArrayBuffer) {
     this.dawg = new DAWG();
@@ -245,7 +249,6 @@ export class NSpell {
       }
     }
   }
-
   /**
    * Check if a word is spelled correctly
    */
@@ -387,9 +390,24 @@ export class NSpell {
    * Get spelling suggestions for a misspelled word
    */
   suggest(word: string): string[] {
-    return suggestImpl(this.dawg, this.affixData, this.compiledCompoundRules, word, (w) =>
-      this.correct(w),
+    const trimmed = word.trim();
+    if (!trimmed) return [];
+
+    // Check cache first
+    const cached = this.suggestCache.get(trimmed);
+    if (cached) return cached;
+
+    const result = suggestImpl(
+      this.dawg,
+      this.affixData,
+      this.compiledCompoundRules,
+      trimmed,
+      (w) => this.correct(w),
     );
+
+    // Cache result
+    this.suggestCache.set(trimmed, result);
+    return result;
   }
 
   /**
@@ -411,15 +429,16 @@ export class NSpell {
       this.affixData.compoundRuleCodes,
     );
     this.correctCache.clear();
+    this.suggestCache.clear();
     return this;
   }
-
   /**
    * Remove a word from the dictionary
    */
   remove(word: string): this {
     this.dawg.remove(word);
     this.correctCache.clear();
+    this.suggestCache.clear();
     return this;
   }
 
@@ -429,6 +448,7 @@ export class NSpell {
   dictionary(dic: string | Uint8Array | ArrayBuffer): this {
     this.loadDictionary(toString(dic));
     this.correctCache.clear();
+    this.suggestCache.clear();
     return this;
   }
 
@@ -488,6 +508,22 @@ export class NSpell {
    */
   get data(): DAWG {
     return this.dawg;
+  }
+
+  /**
+   * Export suggestion cache for persistence (e.g., localStorage, file)
+   * Returns a JSON-serializable object
+   */
+  exportCache(): { entries: [string, string[]][]; maxSize: number } {
+    return this.suggestCache.toJSON();
+  }
+
+  /**
+   * Import previously exported suggestion cache
+   * @param data - Data from exportCache()
+   */
+  importCache(data: { entries: [string, string[]][]; maxSize?: number }): void {
+    this.suggestCache.fromJSON(data);
   }
 }
 

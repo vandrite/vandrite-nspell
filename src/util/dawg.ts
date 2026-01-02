@@ -1,20 +1,10 @@
 /**
- * DAWG (Directed Acyclic Word Graph) implementation for efficient word storage
- *
- * Benefits over plain objects:
- * - 50-80% memory reduction through prefix/suffix sharing
- * - O(m) lookup where m is word length
- * - Efficient prefix search for suggestions
+ * DAWG (Directed Acyclic Word Graph) - memory-efficient word storage
  */
 
 import type { DAWGNode, SerializedDAWGNode } from '../types';
 
-/**
- * DAWG - Directed Acyclic Word Graph
- *
- * A memory-efficient data structure for storing a dictionary of words.
- * Words sharing common prefixes share the same nodes.
- */
+/** DAWG - memory-efficient data structure for storing a dictionary */
 export class DAWG {
   private root: DAWGNode;
   private _size: number = 0;
@@ -146,6 +136,39 @@ export class DAWG {
       yield word;
       count++;
     }
+  }
+
+  /**
+   * Get words matching a prefix with their flags (optimized for suggestions)
+   * Returns array of { word, flags } for faster batch processing
+   */
+  getPrefixMatches(
+    prefix: string,
+    maxResults: number = 50,
+  ): Array<{ word: string; flags?: string[] }> {
+    const node = this.findNode(prefix);
+    if (!node) return [];
+
+    const results: Array<{ word: string; flags?: string[] }> = [];
+
+    const collect = (n: DAWGNode, currentWord: string): boolean => {
+      if (results.length >= maxResults) return false;
+
+      if (n.isEnd) {
+        results.push({ word: currentWord, flags: n.flags });
+      }
+
+      for (const char in n.children) {
+        if (!collect(n.children[char], currentWord + char)) {
+          return false;
+        }
+      }
+
+      return true;
+    };
+
+    collect(node, prefix);
+    return results;
   }
 
   /**

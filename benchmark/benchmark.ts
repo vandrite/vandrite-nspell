@@ -243,26 +243,79 @@ async function runBenchmarks(): Promise<void> {
   log();
 
   // ===========================================================================
-  // Suggestion Benchmark
+  // Suggestion Benchmark - COLD CACHE (unique words, no repeat queries)
   // ===========================================================================
-  log('💡 SUGGESTIONS');
+  log('💡 SUGGESTIONS (COLD - unique words, algorithm performance)');
   log('-'.repeat(60));
 
-  const suggestOriginal = benchmark(
+  // Use realistic misspelled words similar to dictionary words
+  // These words are close to real words so suggestions are found quickly
+  const coldMisspellings = [
+    'helo',
+    'wrold',
+    'tets',
+    'computr',
+    'progam',
+    'develp',
+    'speling',
+    'wurd',
+    'gud',
+    'beter',
+    'corect',
+    'sofware',
+  ];
+
+  const suggestOriginalCold = benchmark(
     'original',
-    'suggest()',
+    'suggest() cold',
+    () => {
+      for (const word of coldMisspellings) {
+        original.suggest(word);
+      }
+    },
+    5, // Few iterations to measure algorithm, not cache
+  );
+  printResult(suggestOriginalCold);
+
+  // Clear vandrite cache before cold test
+  vandrite.importCache({ entries: [] }); // Clear cache
+
+  const suggestVandriteCold = benchmark(
+    '@vandrite',
+    'suggest() cold',
+    () => {
+      // Clear cache each iteration to test algorithm without cache
+      vandrite.importCache({ entries: [] });
+      for (const word of coldMisspellings) {
+        vandrite.suggest(word);
+      }
+    },
+    5,
+  );
+  printResult(suggestVandriteCold);
+  log();
+
+  // ===========================================================================
+  // Suggestion Benchmark - WARM CACHE (repeated words)
+  // ===========================================================================
+  log('💡 SUGGESTIONS (WARM - same words, shows cache benefit)');
+  log('-'.repeat(60));
+
+  const suggestOriginalWarm = benchmark(
+    'original',
+    'suggest() warm',
     () => {
       for (const word of incorrectWords) {
         original.suggest(word);
       }
     },
-    50, // Fewer iterations as suggestions are slower
+    50,
   );
-  printResult(suggestOriginal);
+  printResult(suggestOriginalWarm);
 
-  const suggestVandrite = benchmark(
+  const suggestVandriteWarm = benchmark(
     '@vandrite',
-    'suggest()',
+    'suggest() warm',
     () => {
       for (const word of incorrectWords) {
         vandrite.suggest(word);
@@ -270,7 +323,7 @@ async function runBenchmarks(): Promise<void> {
     },
     50,
   );
-  printResult(suggestVandrite);
+  printResult(suggestVandriteWarm);
   log();
 
   // ===========================================================================
@@ -303,7 +356,8 @@ async function runBenchmarks(): Promise<void> {
     { label: 'Construction', o: constructOriginal, v: constructVandrite },
     { label: 'Correct check', o: correctOriginal, v: correctVandrite },
     { label: 'Incorrect check', o: incorrectOriginal, v: incorrectVandrite },
-    { label: 'Suggestions', o: suggestOriginal, v: suggestVandrite },
+    { label: 'Suggestions (cold)', o: suggestOriginalCold, v: suggestVandriteCold },
+    { label: 'Suggestions (warm)', o: suggestOriginalWarm, v: suggestVandriteWarm },
     { label: 'Add word', o: addOriginal, v: addVandrite },
   ];
 

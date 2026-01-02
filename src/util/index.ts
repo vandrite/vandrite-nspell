@@ -1,12 +1,8 @@
-/**
- * Utility functions for text processing
- */
+/** Text processing utilities */
 
 import type { CasingType } from '../types';
 
-/**
- * Convert buffer/Uint8Array to string
- */
+/** Convert buffer/Uint8Array to string */
 export function toString(value: string | Uint8Array | ArrayBuffer): string {
   if (typeof value === 'string') return value;
   if (value instanceof ArrayBuffer) {
@@ -15,9 +11,7 @@ export function toString(value: string | Uint8Array | ArrayBuffer): string {
   return new TextDecoder().decode(value);
 }
 
-/**
- * Detect the casing type of a word
- */
+/** Detect casing type (lower, upper, capitalized, mixed) */
 export function detectCasing(word: string): CasingType {
   if (!word) return null;
 
@@ -40,9 +34,7 @@ export function detectCasing(word: string): CasingType {
   return 'mixed';
 }
 
-/**
- * Apply casing to a word based on a model word's casing
- */
+/** Apply casing to a word based on a model word's casing */
 export function applyCasing(word: string, casing: CasingType): string {
   switch (casing) {
     case 'lower':
@@ -56,9 +48,7 @@ export function applyCasing(word: string, casing: CasingType): string {
   }
 }
 
-/**
- * Normalize a word using input conversion rules
- */
+/** Normalize a word using input conversion rules */
 export function normalize(word: string, conversions: [RegExp, string][]): string {
   let result = word;
   for (const [pattern, replacement] of conversions) {
@@ -67,9 +57,7 @@ export function normalize(word: string, conversions: [RegExp, string][]): string
   return result;
 }
 
-/**
- * Apply output conversion rules to a word
- */
+/** Apply output conversion rules to a word */
 export function denormalize(word: string, conversions: [RegExp, string][]): string {
   let result = word;
   for (const [pattern, replacement] of conversions) {
@@ -78,18 +66,13 @@ export function denormalize(word: string, conversions: [RegExp, string][]): stri
   return result;
 }
 
-/**
- * Check if a word has a specific flag
- */
+/** Check if a word has a specific flag */
 export function hasFlag(flags: string[] | undefined, flag: string | undefined): boolean {
   if (!flag || !flags) return false;
   return flags.includes(flag);
 }
 
-/**
- * Parse a line from a .dic file
- * Format: word/flags or just word
- */
+/** Parse a line from a .dic file */
 export function parseDicLine(line: string): { word: string; flags: string[] } {
   const trimmed = line.trim();
   if (!trimmed) {
@@ -112,9 +95,7 @@ export function parseDicLine(line: string): { word: string; flags: string[] } {
   };
 }
 
-/**
- * Find the first unescaped slash in a string
- */
+/** Find the first unescaped slash in a string */
 function findUnescapedSlash(str: string): number {
   for (let i = 0; i < str.length; i++) {
     if (str[i] === '/' && (i === 0 || str[i - 1] !== '\\')) {
@@ -124,9 +105,7 @@ function findUnescapedSlash(str: string): number {
   return -1;
 }
 
-/**
- * Parse flag string based on format (default: single character flags)
- */
+/** Parse flag string based on format */
 export function parseFlags(
   flagStr: string,
   format: 'short' | 'long' | 'num' | 'UTF-8' = 'short',
@@ -157,23 +136,17 @@ export function parseFlags(
   }
 }
 
-/**
- * Split text into lines, handling different line endings
- */
+/** Split text into lines */
 export function splitLines(text: string): string[] {
   return text.split(/\r?\n/);
 }
 
-/**
- * Create a regex that matches at the end of a string
- */
+/** Create a regex that matches at the end of a string */
 export function endRegex(pattern: string): RegExp {
   return new RegExp(pattern + '$');
 }
 
-/**
- * Create a regex that matches at the start of a string
- */
+/** Create a regex that matches at the start of a string */
 export function startRegex(pattern: string): RegExp {
   return new RegExp('^' + pattern);
 }

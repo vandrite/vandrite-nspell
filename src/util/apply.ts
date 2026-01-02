@@ -1,21 +1,10 @@
 /**
  * Apply affix rules to generate word forms
- *
- * This module handles the application of prefix and suffix rules
- * to generate all valid forms of a word.
  */
 
 import type { AffixRule } from '../types';
 
-/**
- * Apply a single affix rule to a word, generating all possible forms
- *
- * @param value - The base word
- * @param rule - The affix rule to apply
- * @param rules - All available rules (for continuation)
- * @param words - Array to collect generated words
- * @returns The words array with new forms added
- */
+/** Apply a single affix rule to a word, generating all possible forms */
 export function apply(
   value: string,
   rule: AffixRule,
@@ -88,14 +77,7 @@ export function apply(
   return words;
 }
 
-/**
- * Generate all word forms by applying all applicable affix rules
- *
- * @param word - The base word
- * @param flags - The flags associated with the word
- * @param rules - All available affix rules
- * @returns Array of all generated word forms
- */
+/** Generate all word forms by applying all applicable affix rules */
 export function generateForms(
   word: string,
   flags: string[],

@@ -1,22 +1,32 @@
 /**
- * Suggest algorithm for spelling suggestions
- *
- * Implements the full nspell suggest algorithm with:
- * - Replacement table lookups
- * - Keyboard proximity edits
- * - Double/missing character detection
- * - Edit distance 1 and 2
- * - Weighted sorting
+ * Spelling suggestions with multi-strategy candidate generation
  */
 
 import type { AffixData, AffixFlags } from '../types';
 import { DAWG } from './dawg';
 import { normalize, denormalize, detectCasing } from './index';
-import { form } from './form';
+import { phoneticSimilarity } from './phonetics';
+import { generateKeyboardEdits, calculateKeyboardScore, generateSwapEdits } from './keyboard';
+import { getWeights, calculateWeightedScore } from './weights';
+import { getFrequencyScore } from './frequency';
+
+/**
+ * Suggestion with scoring details
+ */
+interface ScoredSuggestion {
+  word: string;
+  scores: {
+    editDistance: number;
+    ngram: number;
+    phonetic: number;
+    frequency: number;
+    keyboard: number;
+  };
+  finalScore: number;
+}
 
 /**
  * Get equivalent characters from dictionary MAP groups
- * Returns other characters in the same equivalence group
  */
 function getMapEquivalents(char: string, mapGroups: string[]): string[] {
   const lower = char.toLowerCase();
@@ -25,7 +35,6 @@ function getMapEquivalents(char: string, mapGroups: string[]): string[] {
   for (const group of mapGroups) {
     const lowerGroup = group.toLowerCase();
     if (lowerGroup.includes(lower)) {
-      // Add all other characters in this group
       for (const c of group) {
         if (c.toLowerCase() !== lower) {
           equivalents.push(c.toLowerCase());
@@ -50,8 +59,7 @@ function generateNgrams(word: string, n: number = 2): Set<string> {
 }
 
 /**
- * Calculate n-gram similarity score between two words
- * Returns a score from 0 to 1
+ * Calculate n-gram similarity score between two words (Dice coefficient)
  */
 function ngramSimilarity(word1: string, word2: string, n: number = 2): number {
   const ngrams1 = generateNgrams(word1, n);
@@ -64,7 +72,6 @@ function ngramSimilarity(word1: string, word2: string, n: number = 2): number {
     if (ngrams2.has(ng)) intersection++;
   }
 
-  // Dice coefficient
   return (2 * intersection) / (ngrams1.size + ngrams2.size);
 }
 
@@ -81,26 +88,50 @@ function commonPrefixLength(a: string, b: string): number {
   return i;
 }
 
+/**
+ * Calculate edit distance score (0-1, higher = more similar)
+ */
+function editDistanceScore(word1: string, word2: string): number {
+  const len1 = word1.length;
+  const len2 = word2.length;
+  const maxLen = Math.max(len1, len2);
+
+  if (maxLen === 0) return 1;
+
+  // Simple Levenshtein approximation for scoring
+  const prefixLen = commonPrefixLength(word1, word2);
+  const lengthDiff = Math.abs(len1 - len2);
+
+  // Approximate score based on prefix match and length similarity
+  const prefixScore = prefixLen / maxLen;
+  const lengthScore = 1 - lengthDiff / maxLen;
+
+  return prefixScore * 0.6 + lengthScore * 0.4;
+}
+
 interface SuggestMemory {
   state: Map<string, boolean>;
-  weighted: Map<string, number>;
-  suggestions: string[];
+  candidates: Set<string>;
 }
 
 /**
  * Get spelling suggestions for a word
+ *
+ * @param dawg - The DAWG dictionary
+ * @param affixData - Affix rules and data
+ * @param compoundRules - Compiled compound rules
+ * @param value - The word to get suggestions for
+ * @param correctFn - Function to check if a word is correct
+ * @param langCode - Language code for weight selection (default: 'en')
  */
 export function suggest(
   dawg: DAWG,
   affixData: AffixData,
-  compoundRules: RegExp[],
+  _compoundRules: RegExp[],
   value: string,
   correctFn: (word: string) => boolean,
+  langCode: string = 'en',
 ): string[] {
-  const suggestions: string[] = [];
-  const weighted = new Map<string, number>();
-  const edits: string[] = [];
-
   // Normalize input
   const normalized = normalize(value.trim(), affixData.conversion.in);
 
@@ -109,17 +140,28 @@ export function suggest(
   }
 
   const currentCase = detectCasing(normalized);
+  const weights = getWeights(langCode);
 
-  // 1. Check the replacement table
+  // Memory to track processed candidates
+  const memory: SuggestMemory = {
+    state: new Map(),
+    candidates: new Set(),
+  };
+
+  // Generate candidates
+
+  const rawCandidates: string[] = [];
+
+  // Strategy 1: Replacement table lookups
   for (const [from, to] of affixData.replacementTable) {
     let offset = normalized.indexOf(from);
     while (offset > -1) {
-      edits.push(normalized.slice(0, offset) + to + normalized.slice(offset + from.length));
+      rawCandidates.push(normalized.slice(0, offset) + to + normalized.slice(offset + from.length));
       offset = normalized.indexOf(from, offset + 1);
     }
   }
 
-  // 2. Check keyboard proximity
+  // Strategy 2: Keyboard proximity (from affix KEY groups)
   for (let i = 0; i < normalized.length; i++) {
     const character = normalized.charAt(i);
     const before = normalized.slice(0, i);
@@ -130,27 +172,28 @@ export function suggest(
 
     for (const group of affixData.flags.KEY) {
       const position = group.indexOf(insensitive);
-
       if (position < 0) continue;
 
       for (let j = 0; j < group.length; j++) {
         if (j !== position) {
           let otherCharacter = group.charAt(j);
-
           if (localCharAdded[otherCharacter]) continue;
           localCharAdded[otherCharacter] = true;
 
           if (upper) {
             otherCharacter = otherCharacter.toUpperCase();
           }
-
-          edits.push(before + otherCharacter + after);
+          rawCandidates.push(before + otherCharacter + after);
         }
       }
     }
   }
 
-  // 2.5. Generate edits based on dictionary MAP (character equivalences)
+  // Strategy 3: QWERTY keyboard edits (new)
+  rawCandidates.push(...generateKeyboardEdits(normalized));
+  rawCandidates.push(...generateSwapEdits(normalized));
+
+  // Strategy 4: MAP equivalents (character equivalences from affix)
   if (affixData.flags.MAP.length > 0) {
     for (let i = 0; i < normalized.length; i++) {
       const character = normalized.charAt(i);
@@ -159,16 +202,15 @@ export function suggest(
       const lower = character.toLowerCase();
       const upper = lower !== character;
 
-      // Get equivalent characters from MAP
       const variants = getMapEquivalents(character, affixData.flags.MAP);
       for (const variant of variants) {
         const replacementChar = upper ? variant.toUpperCase() : variant;
-        edits.push(before + replacementChar + after);
+        rawCandidates.push(before + replacementChar + after);
       }
     }
   }
 
-  // 3. Double/missing character detection (up to 3 distances)
+  // Strategy 5: Double/missing character detection
   let nextCharacter = normalized.charAt(0);
   let values: string[] = [''];
   let max = 1;
@@ -192,83 +234,230 @@ export function suggest(
       max = values.length;
     }
   }
+  rawCandidates.push(...values);
 
-  edits.push(...values);
-
-  // 4. Ensure capitalized and uppercase values are included
+  // Strategy 6: Case variations
   values = [normalized];
   let replacement = normalized.toLowerCase();
-
   if (normalized === replacement || currentCase === null) {
     values.push(normalized.charAt(0).toUpperCase() + replacement.slice(1));
   }
-
   replacement = normalized.toUpperCase();
   if (normalized !== replacement) {
     values.push(replacement);
   }
 
-  // 5. Generate suggestions with edit distance 1
-  const memory: SuggestMemory = {
-    state: new Map(),
-    weighted,
-    suggestions,
-  };
-
-  const firstLevel = generate(dawg, affixData, compoundRules, correctFn, memory, values, edits);
-
-  // 6. If no suggestions, try edit distance 2 in batches
-  let previous = 0;
-  const maxIterations = Math.min(
-    firstLevel.length,
-    Math.pow(Math.max(15 - normalized.length, 3), 3),
-  );
-  const batchSize = Math.max(Math.pow(10 - normalized.length, 3), 1);
-
-  while (!suggestions.length && previous < maxIterations) {
-    const next = previous + batchSize;
-    generate(dawg, affixData, compoundRules, correctFn, memory, firstLevel.slice(previous, next));
-    previous = next;
+  // Strategy 7: Prefix-based suggestions from DAWG (new)
+  // Use the first N characters as prefix to find similar words
+  const minPrefixLen = Math.max(1, Math.floor(normalized.length * 0.5));
+  for (let prefixLen = normalized.length - 1; prefixLen >= minPrefixLen; prefixLen--) {
+    const prefix = normalized.slice(0, prefixLen).toLowerCase();
+    const prefixMatches = dawg.getPrefixMatches(prefix, 20);
+    for (const match of prefixMatches) {
+      rawCandidates.push(match.word);
+    }
   }
 
-  // 7. Sort suggestions by weight and similarity
-  suggestions.sort((a, b) => {
-    // Base weight from edit generation
-    const weightA = weighted.get(a) || 0;
-    const weightB = weighted.get(b) || 0;
-    if (weightA !== weightB) return weightB - weightA;
+  // Validate candidates
 
-    // N-gram similarity score (higher is better)
-    const ngramA = ngramSimilarity(normalized, a);
-    const ngramB = ngramSimilarity(normalized, b);
-    if (Math.abs(ngramA - ngramB) > 0.1) return ngramB - ngramA;
+  const validCandidates: string[] = [];
 
-    // Common prefix length (higher is better)
-    const prefixA = commonPrefixLength(normalized, a);
-    const prefixB = commonPrefixLength(normalized, b);
-    if (prefixA !== prefixB) return prefixB - prefixA;
+  for (const candidate of rawCandidates) {
+    if (memory.state.has(candidate)) {
+      if (memory.state.get(candidate)) {
+        memory.candidates.add(candidate);
+      }
+      continue;
+    }
 
-    // Length similarity (prefer same length)
-    const lenDiffA = Math.abs(a.length - normalized.length);
-    const lenDiffB = Math.abs(b.length - normalized.length);
+    // Check if valid word
+    let isValid = false;
+    const lower = candidate.toLowerCase();
+
+    if (dawg.has(candidate)) {
+      isValid = !hasNoSuggestFlag(dawg, affixData.flags, candidate);
+    } else if (lower !== candidate && dawg.has(lower)) {
+      isValid = !hasNoSuggestFlag(dawg, affixData.flags, lower);
+    }
+
+    memory.state.set(candidate, isValid);
+
+    if (isValid) {
+      validCandidates.push(candidate);
+      memory.candidates.add(candidate);
+    }
+  }
+
+  // Edit distance 1
+
+  const characters = affixData.flags.TRY;
+  const editDistance1: string[] = [];
+
+  for (const word of values) {
+    let before = '';
+    let character = '';
+    let nextChar = word.charAt(0);
+    let nextAfter = word;
+    let nextNextAfter = word.slice(1);
+    let nextUpper = nextChar.toLowerCase() !== nextChar;
+    const wordCase = detectCasing(word);
+
+    for (let position = 0; position <= word.length; position++) {
+      before += character;
+      const after = nextAfter;
+      nextAfter = nextNextAfter;
+      nextNextAfter = nextAfter.slice(1);
+      character = nextChar;
+      nextChar = word.charAt(position + 1);
+      const upper = nextUpper;
+
+      if (nextChar) {
+        nextUpper = nextChar.toLowerCase() !== nextChar;
+      }
+
+      // Case switching edits
+      if (nextAfter && upper !== nextUpper) {
+        checkAndAdd(before + switchCase(nextAfter));
+        checkAndAdd(before + switchCase(nextChar) + switchCase(character) + nextNextAfter);
+      }
+
+      // Remove
+      checkAndAdd(before + nextAfter);
+
+      // Switch adjacent
+      if (nextAfter) {
+        checkAndAdd(before + nextChar + character + nextNextAfter);
+      }
+
+      // Try all characters
+      for (const inject of characters) {
+        const injectUpper = inject.toUpperCase();
+
+        if (upper && inject !== injectUpper) {
+          if (wordCase !== 'lower') {
+            checkAndAdd(before + inject + after);
+            checkAndAdd(before + inject + nextAfter);
+          }
+          checkAndAdd(before + injectUpper + after);
+          checkAndAdd(before + injectUpper + nextAfter);
+        } else {
+          checkAndAdd(before + inject + after);
+          checkAndAdd(before + inject + nextAfter);
+        }
+      }
+    }
+  }
+
+  function checkAndAdd(value: string): void {
+    if (memory.state.has(value)) {
+      if (memory.state.get(value)) memory.candidates.add(value);
+      return;
+    }
+
+    editDistance1.push(value);
+
+    let isValid = false;
+    const lower = value.toLowerCase();
+
+    if (dawg.has(value)) {
+      isValid = !hasNoSuggestFlag(dawg, affixData.flags, value);
+    } else if (lower !== value && dawg.has(lower)) {
+      isValid = !hasNoSuggestFlag(dawg, affixData.flags, lower);
+    }
+
+    memory.state.set(value, isValid);
+
+    if (isValid) {
+      validCandidates.push(value);
+      memory.candidates.add(value);
+    }
+  }
+
+  function switchCase(fragment: string): string {
+    const first = fragment.charAt(0);
+    return (
+      (first.toLowerCase() === first ? first.toUpperCase() : first.toLowerCase()) +
+      fragment.slice(1)
+    );
+  }
+
+  // Early exit if we have enough suggestions
+  const MIN_GOOD_SUGGESTIONS = 5;
+  const TARGET_SUGGESTIONS = 10;
+
+  // Edit distance 2 (if needed)
+
+  if (validCandidates.length < MIN_GOOD_SUGGESTIONS) {
+    let previous = 0;
+    const maxIterations = Math.min(
+      editDistance1.length,
+      Math.pow(Math.max(15 - normalized.length, 3), 3),
+    );
+    const batchSize = Math.max(Math.pow(10 - normalized.length, 3), 1);
+
+    while (validCandidates.length < TARGET_SUGGESTIONS && previous < maxIterations) {
+      const next = previous + batchSize;
+      const batch = editDistance1.slice(previous, next);
+
+      for (const word of batch) {
+        // Generate simple edits for distance 2
+        for (let i = 0; i < word.length; i++) {
+          checkAndAdd(word.slice(0, i) + word.slice(i + 1)); // delete
+        }
+      }
+
+      previous = next;
+      if (validCandidates.length >= MIN_GOOD_SUGGESTIONS) break;
+    }
+  }
+
+  // Score and rank
+
+  const scoredSuggestions: ScoredSuggestion[] = [];
+
+  for (const word of memory.candidates) {
+    const scores = {
+      editDistance: editDistanceScore(normalized, word),
+      ngram: ngramSimilarity(normalized, word),
+      phonetic: phoneticSimilarity(normalized, word),
+      frequency: getFrequencyScore(word, langCode),
+      keyboard: calculateKeyboardScore(normalized, word),
+    };
+
+    const finalScore = calculateWeightedScore(scores, weights);
+
+    scoredSuggestions.push({ word, scores, finalScore });
+  }
+
+  // Sort by final score (descending)
+  scoredSuggestions.sort((a, b) => {
+    if (Math.abs(a.finalScore - b.finalScore) > 0.01) {
+      return b.finalScore - a.finalScore;
+    }
+
+    // Tie-breakers
+    // Prefer same length
+    const lenDiffA = Math.abs(a.word.length - normalized.length);
+    const lenDiffB = Math.abs(b.word.length - normalized.length);
     if (lenDiffA !== lenDiffB) return lenDiffA - lenDiffB;
 
-    // Casing match
-    const casingA = detectCasing(a);
-    const casingB = detectCasing(b);
+    // Prefer matching case
+    const casingA = detectCasing(a.word);
+    const casingB = detectCasing(b.word);
     if (casingA === currentCase && casingB !== currentCase) return -1;
     if (casingB === currentCase && casingA !== currentCase) return 1;
 
     // Alphabetical
-    return a.localeCompare(b);
+    return a.word.localeCompare(b.word);
   });
 
-  // 8. Normalize output and remove duplicates
+  // Normalize output
+
   const result: string[] = [];
   const normalizedSet = new Set<string>();
 
-  for (const suggestion of suggestions) {
-    const output = denormalize(suggestion, affixData.conversion.out);
+  for (const suggestion of scoredSuggestions) {
+    const output = denormalize(suggestion.word, affixData.conversion.out);
     const lower = output.toLowerCase();
 
     if (!normalizedSet.has(lower)) {
@@ -280,120 +469,6 @@ export function suggest(
   }
 
   return result;
-}
-
-/**
- * Generate candidates with various edits
- */
-function generate(
-  dawg: DAWG,
-  affixData: AffixData,
-  _compoundRules: RegExp[],
-  _correctFn: (word: string) => boolean,
-  memory: SuggestMemory,
-  words: string[],
-  edits?: string[],
-): string[] {
-  const characters = affixData.flags.TRY;
-  const result: string[] = [];
-
-  // Check pre-generated edits
-  if (edits) {
-    for (const edit of edits) {
-      check(edit, true);
-    }
-  }
-
-  // Iterate over each word
-  for (const word of words) {
-    let before = '';
-    let character = '';
-    let nextCharacter = word.charAt(0);
-    let nextAfter = word;
-    let nextNextAfter = word.slice(1);
-    let nextUpper = nextCharacter.toLowerCase() !== nextCharacter;
-    const currentCase = detectCasing(word);
-
-    // Iterate over every character (including end position)
-    for (let position = 0; position <= word.length; position++) {
-      before += character;
-      const after = nextAfter;
-      nextAfter = nextNextAfter;
-      nextNextAfter = nextAfter.slice(1);
-      character = nextCharacter;
-      nextCharacter = word.charAt(position + 1);
-      const upper = nextUpper;
-
-      if (nextCharacter) {
-        nextUpper = nextCharacter.toLowerCase() !== nextCharacter;
-      }
-
-      // Case switching edits
-      if (nextAfter && upper !== nextUpper) {
-        check(before + switchCase(nextAfter));
-        check(before + switchCase(nextCharacter) + switchCase(character) + nextNextAfter);
-      }
-
-      // Remove
-      check(before + nextAfter);
-
-      // Switch adjacent
-      if (nextAfter) {
-        check(before + nextCharacter + character + nextNextAfter);
-      }
-
-      // Try all characters
-      for (const inject of characters) {
-        const injectUpper = inject.toUpperCase();
-
-        if (upper && inject !== injectUpper) {
-          if (currentCase !== 'lower') {
-            check(before + inject + after);
-            check(before + inject + nextAfter);
-          }
-
-          check(before + injectUpper + after);
-          check(before + injectUpper + nextAfter);
-        } else {
-          check(before + inject + after);
-          check(before + inject + nextAfter);
-        }
-      }
-    }
-  }
-
-  return result;
-
-  function check(value: string, double: boolean = false): void {
-    if (memory.state.has(value)) {
-      if (memory.state.get(value)) {
-        memory.weighted.set(value, (memory.weighted.get(value) || 0) + 1);
-      }
-      return;
-    }
-
-    result.push(value);
-
-    // Find the corrected form
-    const corrected = form(dawg, affixData.flags, affixData.conversion.in, value, false);
-
-    const isValid = corrected !== null && !hasNoSuggestFlag(dawg, affixData.flags, corrected);
-
-    memory.state.set(value, isValid);
-
-    if (isValid) {
-      memory.weighted.set(value, double ? 10 : 0);
-      memory.suggestions.push(value);
-    }
-  }
-
-  function switchCase(fragment: string): string {
-    const first = fragment.charAt(0);
-    return (
-      (first.toLowerCase() === first ? first.toUpperCase() : first.toLowerCase()) +
-      fragment.slice(1)
-    );
-  }
 }
 
 /**

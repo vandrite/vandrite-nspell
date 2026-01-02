@@ -1,0 +1,227 @@
+/**
+ * Word frequency data for suggestion ranking
+ */
+
+/**
+ * Top 1000 most common English words (simplified sample)
+ * Score ranges from 1.0 (most common) to 0.0 (not in list)
+ */
+const ENGLISH_FREQUENCY: Record<string, number> = {
+  the: 1.0,
+  be: 0.99,
+  to: 0.98,
+  of: 0.97,
+  and: 0.96,
+  a: 0.95,
+  in: 0.94,
+  that: 0.93,
+  have: 0.92,
+  i: 0.91,
+  it: 0.9,
+  for: 0.89,
+  not: 0.88,
+  on: 0.87,
+  with: 0.86,
+  he: 0.85,
+  as: 0.84,
+  you: 0.83,
+  do: 0.82,
+  at: 0.81,
+  this: 0.8,
+  but: 0.79,
+  his: 0.78,
+  by: 0.77,
+  from: 0.76,
+  they: 0.75,
+  we: 0.74,
+  say: 0.73,
+  her: 0.72,
+  she: 0.71,
+  or: 0.7,
+  an: 0.69,
+  will: 0.68,
+  my: 0.67,
+  one: 0.66,
+  all: 0.65,
+  would: 0.64,
+  there: 0.63,
+  their: 0.62,
+  what: 0.61,
+  so: 0.6,
+  up: 0.59,
+  out: 0.58,
+  if: 0.57,
+  about: 0.56,
+  who: 0.55,
+  get: 0.54,
+  which: 0.53,
+  go: 0.52,
+  me: 0.51,
+  when: 0.5,
+  make: 0.49,
+  can: 0.48,
+  like: 0.47,
+  time: 0.46,
+  no: 0.45,
+  just: 0.44,
+  him: 0.43,
+  know: 0.42,
+  take: 0.41,
+  people: 0.4,
+  into: 0.39,
+  year: 0.38,
+  your: 0.37,
+  good: 0.36,
+  some: 0.35,
+  could: 0.34,
+  them: 0.33,
+  see: 0.32,
+  other: 0.31,
+  than: 0.3,
+  then: 0.29,
+  now: 0.28,
+  look: 0.27,
+  only: 0.26,
+  come: 0.25,
+  its: 0.24,
+  over: 0.23,
+  think: 0.22,
+  also: 0.21,
+  back: 0.2,
+  after: 0.19,
+  use: 0.18,
+  two: 0.17,
+  how: 0.16,
+  our: 0.15,
+  work: 0.14,
+  first: 0.13,
+  well: 0.12,
+  way: 0.11,
+  even: 0.1,
+  new: 0.09,
+  want: 0.08,
+  because: 0.07,
+  any: 0.06,
+  these: 0.05,
+  give: 0.04,
+  day: 0.03,
+  most: 0.02,
+  us: 0.01,
+};
+
+/**
+ * Top Portuguese words (simplified sample)
+ */
+const PORTUGUESE_FREQUENCY: Record<string, number> = {
+  de: 1.0,
+  a: 0.99,
+  o: 0.98,
+  que: 0.97,
+  e: 0.96,
+  do: 0.95,
+  da: 0.94,
+  em: 0.93,
+  um: 0.92,
+  para: 0.91,
+  é: 0.9,
+  com: 0.89,
+  não: 0.88,
+  uma: 0.87,
+  os: 0.86,
+  no: 0.85,
+  se: 0.84,
+  na: 0.83,
+  por: 0.82,
+  mais: 0.81,
+  as: 0.8,
+  dos: 0.79,
+  como: 0.78,
+  mas: 0.77,
+  foi: 0.76,
+  ao: 0.75,
+  ele: 0.74,
+  das: 0.73,
+  tem: 0.72,
+  à: 0.71,
+  seu: 0.7,
+  sua: 0.69,
+  ou: 0.68,
+  ser: 0.67,
+  quando: 0.66,
+  muito: 0.65,
+  há: 0.64,
+  nos: 0.63,
+  já: 0.62,
+  está: 0.61,
+  eu: 0.6,
+  também: 0.59,
+  só: 0.58,
+  pelo: 0.57,
+  pela: 0.56,
+  até: 0.55,
+  isso: 0.54,
+  ela: 0.53,
+  entre: 0.52,
+  era: 0.51,
+  depois: 0.5,
+  sem: 0.49,
+  mesmo: 0.48,
+  aos: 0.47,
+  ter: 0.46,
+  seus: 0.45,
+  quem: 0.44,
+  nas: 0.43,
+  me: 0.42,
+  esse: 0.41,
+  eles: 0.4,
+  estão: 0.39,
+  você: 0.38,
+  tinha: 0.37,
+  foram: 0.36,
+  essa: 0.35,
+  num: 0.34,
+  nem: 0.33,
+  suas: 0.32,
+  meu: 0.31,
+  às: 0.3,
+  minha: 0.29,
+  têm: 0.28,
+  numa: 0.27,
+  pelos: 0.26,
+  elas: 0.25,
+  havia: 0.24,
+  seja: 0.23,
+  qual: 0.22,
+  será: 0.21,
+  nós: 0.2,
+};
+
+/**
+ * Language frequency data map
+ */
+const FREQUENCY_DATA: Record<string, Record<string, number>> = {
+  en: ENGLISH_FREQUENCY,
+  pt: PORTUGUESE_FREQUENCY,
+};
+
+/**
+ * Get frequency score for a word in a specific language
+ * Returns 0.0 for unknown words, up to 1.0 for most common words
+ */
+export function getFrequencyScore(word: string, langCode: string = 'en'): number {
+  const baseLang = langCode.split('-')[0].toLowerCase();
+  const data = FREQUENCY_DATA[baseLang];
+
+  if (!data) return 0.01; // Default small score for unknown languages
+
+  const lower = word.toLowerCase();
+  return data[lower] || 0.01; // Small default score for words not in list
+}
+
+/**
+ * Compare two words by frequency (for sorting)
+ * Returns negative if word1 is more frequent, positive if word2 is more frequent
+ */
+export function compareByFrequency(word1: string, word2: string, langCode: string = 'en'): number {
+  return getFrequencyScore(word2, langCode) - getFrequencyScore(word1, langCode);
+}

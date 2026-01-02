@@ -1,7 +1,5 @@
 /**
  * Affix file (.aff) parser
- *
- * Parses Hunspell affix files to extract rules, flags, and settings.
  */
 
 import type { AffixData, AffixFlags, AffixEntry, AffixRule } from '../types';
